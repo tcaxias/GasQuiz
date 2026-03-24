@@ -18,12 +18,18 @@ export class Game {
   private favoriteTeam: string;
   private currentScene: Scene | null = null;
   private tickerCallback: ((ticker: import('pixi.js').Ticker) => void) | null = null;
+  private onSettings?: (action: 'name' | 'team') => void;
 
-  constructor(playerName: string, favoriteTeam: string) {
+  constructor(
+    playerName: string,
+    favoriteTeam: string,
+    onSettings?: (action: 'name' | 'team') => void,
+  ) {
     this.app = new Application();
     this.audio = new AudioManager();
     this.playerName = playerName;
     this.favoriteTeam = favoriteTeam;
+    this.onSettings = onSettings;
   }
 
   async init(container: HTMLElement): Promise<void> {
@@ -65,9 +71,18 @@ export class Game {
   }
 
   private showMenu(): void {
-    const menuScene = new MenuScene(this.app, this.playerName, this.favoriteTeam, () => {
-      this.startQuiz();
-    });
+    const menuScene = new MenuScene(
+      this.app,
+      this.playerName,
+      this.favoriteTeam,
+      () => this.startQuiz(),
+      (action) => {
+        if (this.onSettings) {
+          this.destroy();
+          this.onSettings(action);
+        }
+      },
+    );
     this.switchScene(menuScene);
   }
 

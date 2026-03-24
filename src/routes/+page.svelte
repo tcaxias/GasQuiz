@@ -63,7 +63,15 @@
 
     requestAnimationFrame(() => {
       if (!container) return;
-      const game = new Game(playerName, favoriteTeam);
+      const game = new Game(playerName, favoriteTeam, (action) => {
+        // Game already called destroy() on itself before calling this
+        if (action === 'name') {
+          nameInput = playerName;
+          screen = 'name';
+        } else {
+          screen = 'team';
+        }
+      });
       game.init(container);
 
       const cleanup = () => game.destroy();

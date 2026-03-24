@@ -20,6 +20,7 @@ interface Particle {
 
 export class MenuScene extends Scene {
   private onStart: OnStartCallback;
+  private onChangeSettings: (action: 'name' | 'team') => void;
   private playerName: string;
   private favoriteTeam: string;
   private titleText!: Text;
@@ -31,11 +32,13 @@ export class MenuScene extends Scene {
     playerName: string,
     favoriteTeam: string,
     onStart: OnStartCallback,
+    onChangeSettings: (action: 'name' | 'team') => void,
   ) {
     super(app);
     this.playerName = playerName;
     this.favoriteTeam = favoriteTeam;
     this.onStart = onStart;
+    this.onChangeSettings = onChangeSettings;
   }
 
   setup(): void {
@@ -116,6 +119,56 @@ export class MenuScene extends Scene {
       this.container.addChild(teamBadge);
     }
 
+    // Settings links — change name / change club
+    const settingsY = this.height * 0.52;
+    const settingsGap = this.s(12);
+
+    const changeName = new Text({
+      text: '✏️ Alterar nome',
+      style: {
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: this.s(14),
+        fill: textColor,
+      },
+    });
+    changeName.alpha = 0.5;
+    changeName.anchor.set(1, 0.5);
+    changeName.x = this.centerX - settingsGap;
+    changeName.y = settingsY;
+    changeName.eventMode = 'static';
+    changeName.cursor = 'pointer';
+    changeName.on('pointerover', () => {
+      changeName.alpha = 0.9;
+    });
+    changeName.on('pointerout', () => {
+      changeName.alpha = 0.5;
+    });
+    changeName.on('pointerdown', () => this.onChangeSettings('name'));
+    this.container.addChild(changeName);
+
+    const changeTeam = new Text({
+      text: '🔄 Alterar clube',
+      style: {
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: this.s(14),
+        fill: textColor,
+      },
+    });
+    changeTeam.alpha = 0.5;
+    changeTeam.anchor.set(0, 0.5);
+    changeTeam.x = this.centerX + settingsGap;
+    changeTeam.y = settingsY;
+    changeTeam.eventMode = 'static';
+    changeTeam.cursor = 'pointer';
+    changeTeam.on('pointerover', () => {
+      changeTeam.alpha = 0.9;
+    });
+    changeTeam.on('pointerout', () => {
+      changeTeam.alpha = 0.5;
+    });
+    changeTeam.on('pointerdown', () => this.onChangeSettings('team'));
+    this.container.addChild(changeTeam);
+
     // Instructions
     const instructions = new Text({
       text: 'Responde a perguntas sobre futebol português!\n3 minutos — quantas consegues acertar?',
@@ -132,14 +185,14 @@ export class MenuScene extends Scene {
     instructions.alpha = 0.6;
     instructions.anchor.set(0.5);
     instructions.x = this.centerX;
-    instructions.y = this.height * 0.58;
+    instructions.y = this.height * 0.62;
     this.container.addChild(instructions);
 
     // Start button
     // Floating background particles
     this.spawnParticles(colors.secondary);
 
-    const button = this.createButton('⚽ Jogar', this.centerX, this.height * 0.74, colors.secondary);
+    const button = this.createButton('⚽ Jogar', this.centerX, this.height * 0.78, colors.secondary);
     this.container.addChild(button);
   }
 
