@@ -4,7 +4,7 @@ import { QuizScene } from './QuizScene';
 import { ResultsScene } from './ResultsScene';
 import { AudioManager } from './AudioManager';
 import { Scene } from './Scene';
-import { generateQuestion } from './questions';
+import { QuestionGenerator } from './questions';
 import { getTeamColors, defaultColors } from '$lib/data/teams';
 
 /**
@@ -74,10 +74,10 @@ export class Game {
   private startQuiz(): void {
     this.audio.startMusic();
 
-    const team = this.favoriteTeam;
+    const generator = new QuestionGenerator(this.favoriteTeam);
     const quizScene = new QuizScene(
       this.app,
-      () => generateQuestion(team),
+      () => generator.next(),
       (result) => {
         if (result.wasCorrect) {
           this.audio.playGoal();

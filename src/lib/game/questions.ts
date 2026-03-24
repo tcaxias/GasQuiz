@@ -1,4 +1,4 @@
-import type { Question, QuestionType, PlayerFoot, Competition } from '$lib/types/quiz';
+import type { Question, QuestionType, PlayerFoot, Competition, MatchResult, Player, ManOfTheMatch } from '$lib/types/quiz';
 import { matches } from '$lib/data/matches';
 import { players, getTeams, getPlayersByTeam } from '$lib/data/players';
 import { manOfTheMatch } from '$lib/data/awards';
@@ -8,6 +8,23 @@ const BIG_THREE = ['FC Porto', 'SL Benfica', 'Sporting CP'];
 
 /** Portuguese clubs that play in European competitions */
 const EUROPEAN_CLUBS = ['FC Porto', 'SL Benfica', 'Sporting CP', 'SC Braga', 'Vitória SC'];
+
+/** Teams that play in the Champions League */
+const CL_TEAMS = ['SL Benfica', 'Sporting CP'];
+
+/** Teams that play in the Europa League */
+const EL_TEAMS = ['FC Porto', 'SC Braga'];
+
+/** Question category for the rotation cycle */
+export type QuestionCategory = 'liga' | 'big' | 'europa' | 'champions';
+
+/**
+ * 7-question repeating cycle:
+ * 1 liga (small clubs) : 2 big three : 2 Europa League : 2 Champions League
+ */
+const CATEGORY_ROTATION: QuestionCategory[] = [
+  'liga', 'big', 'big', 'europa', 'europa', 'champions', 'champions',
+];
 
 /** Pick a random element from an array */
 function pickRandom<T>(arr: T[]): T {
@@ -62,14 +79,70 @@ function matchRoundLabel(match: { jornada: number; competition?: Competition; ro
   return `Jornada ${match.jornada}`;
 }
 
-/**
- * Generate a "match result" question.
- * Shows competition context for European matches.
- */
-function generateMatchResultQuestion(): Question | null {
-  if (matches.length === 0) return null;
+// ── Category filter predicates ──────────────────────────────────────────────
 
-  const match = pickRandom(matches);
+/** Filter matches by question category */
+function filterMatchesByCategory(category: QuestionCategory): MatchResult[] {
+  switch (category) {
+    case 'champions':
+      return matches.filter((m) => m.competition === 'champions');
+    case 'europa':
+      return matches.filter((m) => m.competition === 'europa');
+    case 'big':
+      return matches.filter(
+        (m) => BIG_THREE.includes(m.homeTeam) || BIG_THREE.includes(m.awayTeam),
+      );
+    case 'liga':
+      return matches.filter(
+        (m) =>
+          (!m.competition || m.competition === 'liga') &&
+          !BIG_THREE.includes(m.homeTeam) &&
+          !BIG_THREE.includes(m.awayTeam),
+      );
+  }
+}
+
+/** Filter players by question category */
+function filterPlayersByCategory(category: QuestionCategory): Player[] {
+  switch (category) {
+    case 'champions':
+      return players.filter((p) => CL_TEAMS.includes(p.team));
+    case 'europa':
+      return players.filter((p) => EL_TEAMS.includes(p.team));
+    case 'big':
+      return players.filter((p) => BIG_THREE.includes(p.team));
+    case 'liga':
+      return players.filter((p) => !BIG_THREE.includes(p.team));
+  }
+}
+
+/** Filter MOTM entries by question category. MOTM data is all liga, so only liga and big work. */
+function filterMotmByCategory(category: QuestionCategory): ManOfTheMatch[] {
+  switch (category) {
+    case 'big':
+      return manOfTheMatch.filter(
+        (m) => BIG_THREE.includes(m.homeTeam) || BIG_THREE.includes(m.awayTeam),
+      );
+    case 'liga':
+      return manOfTheMatch.filter(
+        (m) => !BIG_THREE.includes(m.homeTeam) && !BIG_THREE.includes(m.awayTeam),
+      );
+    // No MOTM data for European competitions
+    case 'champions':
+    case 'europa':
+      return [];
+  }
+}
+
+// ── Category-aware question generators ──────────────────────────────────────
+
+/**
+ * Generate a "match result" question from a filtered set of matches.
+ */
+function generateMatchResultFromMatches(filteredMatches: MatchResult[]): Question | null {
+  if (filteredMatches.length === 0) return null;
+
+  const match = pickRandom(filteredMatches);
   const correctScore = `${match.homeGoals}-${match.awayGoals}`;
   const wrongScores = generateWrongScores(match.homeGoals, match.awayGoals);
 
@@ -125,14 +198,160 @@ function generateWrongScores(homeGoals: number, awayGoals: number): [string, str
 }
 
 /**
- * Generate a "shirt number" question.
+ * Generate a "shirt number" question from a filtered set of players.
  */
+function generateShirtNumberFromPlayers(filteredPlayers: Player[]): Question | null {
+  if (filteredPlayers.length === 0) return null;
+
+  // Group by team and find teams with at least 3 players
+  const teamMap = new Map<string, Player[]>();
+  for (const p of filteredPlayers) {
+    const list = teamMap.get(p.team) ?? [];
+    list.push(p);
+    teamMap.set(p.team, list);
+  }
+
+  const viableTeams = [...teamMap.entries()].filter(([, list]) => list.length >= 3);
+  if (viableTeams.length === 0) return null;
+
+  const [team, teamPlayers] = pickRandom(viableTeams);
+  const player = pickRandom(teamPlayers);
+  const correctNumber = String(player.number);
+
+  const otherNumbers = teamPlayers
+    .filter((p) => p.name !== player.name)
+    .map((p) => String(p.number));
+
+  const wrongNumbers = pickRandomExcluding(otherNumbers, [correctNumber], 2);
+
+  while (wrongNumbers.length < 2) {
+    const rnd = String(Math.floor(Math.random() * 40) + 1);
+    if (rnd !== correctNumber && !wrongNumbers.includes(rnd)) {
+      wrongNumbers.push(rnd);
+    }
+  }
+
+  const answers: [string, string, string] = [correctNumber, wrongNumbers[0], wrongNumbers[1]];
+  const shuffledAnswers = shuffle([...answers]);
+  const correctIndex = shuffledAnswers.indexOf(correctNumber);
+
+  return {
+    text: `Qual é o número da camisola de ${player.name}\nno ${team}?`,
+    answers: shuffledAnswers as [string, string, string],
+    correctIndex,
+    type: 'shirt_number',
+    team,
+  };
+}
+
+/**
+ * Generate a "goal scorer" question from a filtered set of matches.
+ */
+function generateGoalScorerFromMatches(filteredMatches: MatchResult[]): Question | null {
+  const matchesWithGoals = filteredMatches.filter(
+    (m) => m.homeScorers.length > 0 || m.awayScorers.length > 0,
+  );
+  if (matchesWithGoals.length === 0) return null;
+
+  const match = pickRandom(matchesWithGoals);
+  const allScorers = [...match.homeScorers, ...match.awayScorers];
+  const correctScorer = pickRandom(allScorers);
+
+  const allPlayerNames = players.map((p) => p.name);
+  const uniqueScorers = [...new Set(allScorers)];
+  const wrongPlayers = pickRandomExcluding(allPlayerNames, uniqueScorers, 2);
+
+  if (wrongPlayers.length < 2) return null;
+
+  const answers: [string, string, string] = [correctScorer, wrongPlayers[0], wrongPlayers[1]];
+  const shuffledAnswers = shuffle([...answers]);
+  const correctIndex = shuffledAnswers.indexOf(correctScorer);
+
+  const comp = match.competition ?? 'liga';
+  const roundText = matchRoundLabel(match);
+  const compText = comp !== 'liga' ? `${competitionLabel(comp)} — ` : '';
+
+  return {
+    text: `Quem marcou golo no jogo\n${match.homeTeam} ${match.homeGoals}-${match.awayGoals} ${match.awayTeam}?\n(${compText}${roundText})`,
+    answers: shuffledAnswers as [string, string, string],
+    correctIndex,
+    type: 'goal_scorer',
+    team: match.homeTeam,
+    competition: comp,
+  };
+}
+
+/**
+ * Generate a "player foot" question from a filtered set of players.
+ */
+function generatePlayerFootFromPlayers(filteredPlayers: Player[]): Question | null {
+  if (filteredPlayers.length === 0) return null;
+
+  const player = pickRandom(filteredPlayers);
+  const correctFoot = footLabel(player.foot);
+
+  const allFeet: PlayerFoot[] = ['right', 'left', 'both'];
+  const wrongFeet = allFeet.filter((f) => f !== player.foot).map(footLabel);
+
+  const answers: [string, string, string] = [correctFoot, wrongFeet[0], wrongFeet[1]];
+  const shuffledAnswers = shuffle([...answers]);
+  const correctIndex = shuffledAnswers.indexOf(correctFoot);
+
+  return {
+    text: `Qual é o pé preferido de ${player.name}\n(${player.team})?`,
+    answers: shuffledAnswers as [string, string, string],
+    correctIndex,
+    type: 'player_foot',
+    team: player.team,
+  };
+}
+
+/**
+ * Generate a "man of the match" question from a filtered set of MOTM entries.
+ */
+function generateMotmFromEntries(filteredMotm: ManOfTheMatch[]): Question | null {
+  if (filteredMotm.length === 0) return null;
+
+  const motm = pickRandom(filteredMotm);
+  const correctPlayer = motm.player;
+
+  const homePlayers = getPlayersByTeam(motm.homeTeam).map((p) => p.name);
+  const awayPlayers = getPlayersByTeam(motm.awayTeam).map((p) => p.name);
+  const matchPlayers = [...homePlayers, ...awayPlayers];
+
+  const wrongPlayers = pickRandomExcluding(matchPlayers, [correctPlayer], 2);
+
+  if (wrongPlayers.length < 2) {
+    const allNames = players.map((p) => p.name);
+    const extra = pickRandomExcluding(allNames, [correctPlayer, ...wrongPlayers], 2 - wrongPlayers.length);
+    wrongPlayers.push(...extra);
+  }
+
+  if (wrongPlayers.length < 2) return null;
+
+  const answers: [string, string, string] = [correctPlayer, wrongPlayers[0], wrongPlayers[1]];
+  const shuffledAnswers = shuffle([...answers]);
+  const correctIndex = shuffledAnswers.indexOf(correctPlayer);
+
+  return {
+    text: `Quem foi o melhor jogador do jogo\n${motm.homeTeam} ${motm.homeGoals}-${motm.awayGoals} ${motm.awayTeam}?\n(Jornada ${motm.jornada})`,
+    answers: shuffledAnswers as [string, string, string],
+    correctIndex,
+    type: 'man_of_the_match',
+    team: motm.team,
+  };
+}
+
+// ── Legacy unfiltered generators (for backward compat) ──────────────────────
+
+function generateMatchResultQuestion(): Question | null {
+  return generateMatchResultFromMatches(matches);
+}
+
 function generateShirtNumberQuestion(): Question | null {
   if (players.length === 0) return null;
-
   const teams = getTeams();
   if (teams.length === 0) return null;
-
   const viableTeams = teams.filter((t) => getPlayersByTeam(t).length >= 3);
   if (viableTeams.length === 0) return null;
 
@@ -167,106 +386,19 @@ function generateShirtNumberQuestion(): Question | null {
   };
 }
 
-/**
- * Generate a "goal scorer" question.
- * Shows competition context for European matches.
- */
 function generateGoalScorerQuestion(): Question | null {
-  const matchesWithGoals = matches.filter(
-    (m) => m.homeScorers.length > 0 || m.awayScorers.length > 0,
-  );
-  if (matchesWithGoals.length === 0) return null;
-
-  const match = pickRandom(matchesWithGoals);
-  const allScorers = [...match.homeScorers, ...match.awayScorers];
-  const correctScorer = pickRandom(allScorers);
-
-  const allPlayerNames = players.map((p) => p.name);
-  const uniqueScorers = [...new Set(allScorers)];
-  const wrongPlayers = pickRandomExcluding(allPlayerNames, uniqueScorers, 2);
-
-  if (wrongPlayers.length < 2) return null;
-
-  const answers: [string, string, string] = [correctScorer, wrongPlayers[0], wrongPlayers[1]];
-  const shuffledAnswers = shuffle([...answers]);
-  const correctIndex = shuffledAnswers.indexOf(correctScorer);
-
-  const comp = match.competition ?? 'liga';
-  const roundText = matchRoundLabel(match);
-  const compText = comp !== 'liga' ? `${competitionLabel(comp)} — ` : '';
-
-  return {
-    text: `Quem marcou golo no jogo\n${match.homeTeam} ${match.homeGoals}-${match.awayGoals} ${match.awayTeam}?\n(${compText}${roundText})`,
-    answers: shuffledAnswers as [string, string, string],
-    correctIndex,
-    type: 'goal_scorer',
-    team: match.homeTeam,
-    competition: comp,
-  };
+  return generateGoalScorerFromMatches(matches);
 }
 
-/**
- * Generate a "player foot" question.
- */
 function generatePlayerFootQuestion(): Question | null {
-  if (players.length === 0) return null;
-
-  const player = pickRandom(players);
-  const correctFoot = footLabel(player.foot);
-
-  const allFeet: PlayerFoot[] = ['right', 'left', 'both'];
-  const wrongFeet = allFeet.filter((f) => f !== player.foot).map(footLabel);
-
-  const answers: [string, string, string] = [correctFoot, wrongFeet[0], wrongFeet[1]];
-  const shuffledAnswers = shuffle([...answers]);
-  const correctIndex = shuffledAnswers.indexOf(correctFoot);
-
-  return {
-    text: `Qual é o pé preferido de ${player.name}\n(${player.team})?`,
-    answers: shuffledAnswers as [string, string, string],
-    correctIndex,
-    type: 'player_foot',
-    team: player.team,
-  };
+  return generatePlayerFootFromPlayers(players);
 }
 
-/**
- * Generate a "man of the match" question.
- */
 function generateManOfTheMatchQuestion(): Question | null {
-  if (manOfTheMatch.length === 0) return null;
-
-  const motm = pickRandom(manOfTheMatch);
-  const correctPlayer = motm.player;
-
-  const homePlayers = getPlayersByTeam(motm.homeTeam).map((p) => p.name);
-  const awayPlayers = getPlayersByTeam(motm.awayTeam).map((p) => p.name);
-  const matchPlayers = [...homePlayers, ...awayPlayers];
-
-  const wrongPlayers = pickRandomExcluding(matchPlayers, [correctPlayer], 2);
-
-  if (wrongPlayers.length < 2) {
-    const allNames = players.map((p) => p.name);
-    const extra = pickRandomExcluding(allNames, [correctPlayer, ...wrongPlayers], 2 - wrongPlayers.length);
-    wrongPlayers.push(...extra);
-  }
-
-  if (wrongPlayers.length < 2) return null;
-
-  const answers: [string, string, string] = [correctPlayer, wrongPlayers[0], wrongPlayers[1]];
-  const shuffledAnswers = shuffle([...answers]);
-  const correctIndex = shuffledAnswers.indexOf(correctPlayer);
-
-  return {
-    text: `Quem foi o melhor jogador do jogo\n${motm.homeTeam} ${motm.homeGoals}-${motm.awayGoals} ${motm.awayTeam}?\n(Jornada ${motm.jornada})`,
-    answers: shuffledAnswers as [string, string, string],
-    correctIndex,
-    type: 'man_of_the_match',
-    team: motm.team,
-  };
+  return generateMotmFromEntries(manOfTheMatch);
 }
 
-/** Map of question type to generator function */
+/** Map of question type to generator function (unfiltered, for backward compat) */
 const generatorMap: Record<QuestionType, () => Question | null> = {
   match_result: generateMatchResultQuestion,
   shirt_number: generateShirtNumberQuestion,
@@ -284,74 +416,151 @@ const allTypes: QuestionType[] = [
   'man_of_the_match',
 ];
 
-/**
- * Generate a random question, weighted by competition and team.
- *
- * Weighting:
- * - Favorite team: 3x (always accepted)
- * - European competitions (CL/EL/ECL): 2x
- * - Big three PT clubs: 2x
- * - Smaller PT clubs: 1x (half of big clubs)
- */
-export function generateQuestion(favoriteTeam?: string): Question {
-  for (let attempt = 0; attempt < 30; attempt++) {
-    const type = pickRandom(allTypes);
-    const gen = generatorMap[type];
-    const question = gen();
-    if (!question) continue;
+// ── QuestionGenerator class ─────────────────────────────────────────────────
 
-    const weight = getQuestionWeight(question, favoriteTeam);
-    if (Math.random() < weight) {
+/**
+ * Stateful question generator with structured category rotation
+ * and no consecutive same-type questions.
+ *
+ * Uses a 7-question repeating cycle:
+ *   liga → big → big → europa → europa → champions → champions
+ */
+export class QuestionGenerator {
+  private categoryIndex: number;
+  private lastType: QuestionType | null = null;
+  private favoriteTeam?: string;
+
+  constructor(favoriteTeam?: string) {
+    this.favoriteTeam = favoriteTeam;
+    // Random starting position so games don't always start the same
+    this.categoryIndex = Math.floor(Math.random() * CATEGORY_ROTATION.length);
+  }
+
+  /** Generate the next question, respecting category rotation and type diversity. */
+  next(): Question {
+    const category = CATEGORY_ROTATION[this.categoryIndex % CATEGORY_ROTATION.length];
+
+    // Try to generate a question matching the current category with a different type
+    const question = this.generateForCategory(category);
+    if (question) {
+      this.lastType = question.type;
+      this.categoryIndex = (this.categoryIndex + 1) % CATEGORY_ROTATION.length;
       return question;
+    }
+
+    // Fallback: try all other categories if this one has no viable data
+    for (let offset = 1; offset < CATEGORY_ROTATION.length; offset++) {
+      const fallbackIdx = (this.categoryIndex + offset) % CATEGORY_ROTATION.length;
+      const fallbackCategory = CATEGORY_ROTATION[fallbackIdx];
+      const fallbackQuestion = this.generateForCategory(fallbackCategory);
+      if (fallbackQuestion) {
+        this.lastType = fallbackQuestion.type;
+        this.categoryIndex = (this.categoryIndex + 1) % CATEGORY_ROTATION.length;
+        return fallbackQuestion;
+      }
+    }
+
+    // Ultimate fallback — use unfiltered generation
+    this.categoryIndex = (this.categoryIndex + 1) % CATEGORY_ROTATION.length;
+    return this.generateUnfiltered();
+  }
+
+  /**
+   * Try to generate a question for a specific category.
+   * Picks a random type that differs from the last type.
+   */
+  private generateForCategory(category: QuestionCategory): Question | null {
+    // Determine which types are available for this category
+    const availableTypes = this.getAvailableTypes(category);
+
+    // Filter out the last type to prevent consecutive repeats
+    const candidateTypes = availableTypes.filter((t) => t !== this.lastType);
+
+    // Try candidate types (non-repeating) first, in random order
+    for (const type of shuffle([...candidateTypes])) {
+      const question = this.generateTypedForCategory(type, category);
+      if (question) return question;
+    }
+
+    // If no non-repeating type works, try all available types (allows repeat as last resort)
+    for (const type of shuffle([...availableTypes])) {
+      const question = this.generateTypedForCategory(type, category);
+      if (question) return question;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get question types that can potentially produce results for a category.
+   * MOTM only works for liga/big since all MOTM data is from league matches.
+   */
+  private getAvailableTypes(category: QuestionCategory): QuestionType[] {
+    const types: QuestionType[] = ['match_result', 'goal_scorer', 'shirt_number', 'player_foot'];
+    if (category === 'liga' || category === 'big') {
+      types.push('man_of_the_match');
+    }
+    return types;
+  }
+
+  /** Generate a question of a specific type filtered by category. */
+  private generateTypedForCategory(type: QuestionType, category: QuestionCategory): Question | null {
+    switch (type) {
+      case 'match_result':
+        return generateMatchResultFromMatches(filterMatchesByCategory(category));
+      case 'goal_scorer':
+        return generateGoalScorerFromMatches(filterMatchesByCategory(category));
+      case 'shirt_number':
+        return generateShirtNumberFromPlayers(filterPlayersByCategory(category));
+      case 'player_foot':
+        return generatePlayerFootFromPlayers(filterPlayersByCategory(category));
+      case 'man_of_the_match':
+        return generateMotmFromEntries(filterMotmByCategory(category));
     }
   }
 
-  // Fallback
-  const shuffledTypes = shuffle([...allTypes]);
-  for (const type of shuffledTypes) {
-    const question = generatorMap[type]();
-    if (question) return question;
+  /** Unfiltered fallback — picks any question that differs from the last type. */
+  private generateUnfiltered(): Question {
+    const candidateTypes = allTypes.filter((t) => t !== this.lastType);
+    for (const type of shuffle([...candidateTypes])) {
+      const question = generatorMap[type]();
+      if (question) {
+        this.lastType = question.type;
+        return question;
+      }
+    }
+
+    // Absolute last resort — any type
+    for (const type of shuffle([...allTypes])) {
+      const question = generatorMap[type]();
+      if (question) {
+        this.lastType = question.type;
+        return question;
+      }
+    }
+
+    return {
+      text: 'Qual é o clube mais antigo de Portugal?',
+      answers: ['FC Porto', 'SL Benfica', 'Sporting CP'],
+      correctIndex: 0,
+      type: 'match_result',
+    };
   }
-
-  return {
-    text: 'Qual é o clube mais antigo de Portugal?',
-    answers: ['FC Porto', 'SL Benfica', 'Sporting CP'],
-    correctIndex: 0,
-    type: 'match_result',
-  };
 }
 
+// ── Backward-compatible exported functions ──────────────────────────────────
+
 /**
- * Get acceptance probability for a question.
- *
- * Proportions:
- *   favorite club  → 1.0  (always accept = 3x effective)
- *   european match  → 0.66 (≈ 2x)
- *   big three club  → 0.66 (≈ 2x)
- *   smaller club    → 0.33 (≈ 1x, half of big clubs)
+ * Generate a random question using the stateful generator.
+ * Creates a temporary instance for backward compatibility.
  */
-function getQuestionWeight(question: Question, favoriteTeam?: string): number {
-  const team = question.team;
-  const comp = question.competition;
-
-  // Favorite team always accepted
-  if (favoriteTeam && team === favoriteTeam) return 1.0;
-
-  // European competition questions get 2x
-  if (comp && comp !== 'liga') return 0.66;
-
-  // Big three PT clubs get 2x
-  if (team && BIG_THREE.includes(team)) return 0.66;
-
-  // European clubs (Braga, Vitória) in liga questions still get slightly boosted
-  if (team && EUROPEAN_CLUBS.includes(team)) return 0.5;
-
-  // Smaller clubs get 1x (baseline)
-  return 0.33;
+export function generateQuestion(favoriteTeam?: string): Question {
+  const generator = new QuestionGenerator(favoriteTeam);
+  return generator.next();
 }
 
 /**
- * Generate a question of a specific type.
+ * Generate a question of a specific type (unfiltered).
  */
 export function generateQuestionOfType(type: QuestionType): Question | null {
   return generatorMap[type]();

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Game } from './Game';
-import { generateQuestion, generateQuestionOfType } from './questions';
+import { generateQuestion, generateQuestionOfType, QuestionGenerator } from './questions';
+import type { QuestionCategory } from './questions';
 import { matches } from '$lib/data/matches';
 import { players, getTeams, getPlayersByTeam } from '$lib/data/players';
 import { manOfTheMatch } from '$lib/data/awards';
@@ -175,5 +176,68 @@ describe('Question generation', () => {
       texts.add(generateQuestion().text);
     }
     expect(texts.size).toBeGreaterThan(5);
+  });
+});
+
+describe('QuestionGenerator', () => {
+  it('never repeats question types consecutively', () => {
+    const generator = new QuestionGenerator();
+    const questions = Array.from({ length: 20 }, () => generator.next());
+
+    for (let i = 1; i < questions.length; i++) {
+      expect(
+        questions[i].type,
+        `Question ${i} (${questions[i].type}) should differ from question ${i - 1} (${questions[i - 1].type})`,
+      ).not.toBe(questions[i - 1].type);
+    }
+  });
+
+  it('cycles through all categories', () => {
+    const generator = new QuestionGenerator();
+    // Generate enough questions to cover at least two full cycles (14+)
+    const questions = Array.from({ length: 21 }, () => generator.next());
+
+    // Determine which categories are represented by examining team/competition
+    const BIG_THREE = ['FC Porto', 'SL Benfica', 'Sporting CP'];
+    const seenCategories = new Set<string>();
+
+    for (const q of questions) {
+      const comp = q.competition;
+      const team = q.team;
+
+      if (comp === 'champions') {
+        seenCategories.add('champions');
+      } else if (comp === 'europa') {
+        seenCategories.add('europa');
+      } else if (team && BIG_THREE.includes(team)) {
+        seenCategories.add('big');
+      } else {
+        seenCategories.add('liga');
+      }
+    }
+
+    // Should see all four categories represented
+    expect(seenCategories.has('liga')).toBe(true);
+    expect(seenCategories.has('big')).toBe(true);
+    expect(seenCategories.has('europa')).toBe(true);
+    expect(seenCategories.has('champions')).toBe(true);
+  });
+
+  it('works with a favorite team', () => {
+    const generator = new QuestionGenerator('FC Porto');
+    const questions = Array.from({ length: 10 }, () => generator.next());
+
+    // All questions should be valid
+    for (const q of questions) {
+      expect(q.text).toBeTruthy();
+      expect(q.answers).toHaveLength(3);
+      expect(q.correctIndex).toBeGreaterThanOrEqual(0);
+      expect(q.correctIndex).toBeLessThan(3);
+    }
+
+    // No consecutive same-type even with favorite team
+    for (let i = 1; i < questions.length; i++) {
+      expect(questions[i].type).not.toBe(questions[i - 1].type);
+    }
   });
 });
