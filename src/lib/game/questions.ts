@@ -257,9 +257,28 @@ function generateGoalScorerFromMatches(filteredMatches: MatchResult[]): Question
   const allScorers = [...match.homeScorers, ...match.awayScorers];
   const correctScorer = pickRandom(allScorers);
 
-  const allPlayerNames = players.map((p) => p.name);
+  // Determine which team the scorer belongs to
+  const scorerTeam = match.homeScorers.includes(correctScorer)
+    ? match.homeTeam
+    : match.awayTeam;
+
+  // Get teammates from the same team, excluding all actual scorers
   const uniqueScorers = [...new Set(allScorers)];
-  const wrongPlayers = pickRandomExcluding(allPlayerNames, uniqueScorers, 2);
+  const teammates = players
+    .filter((p) => p.team === scorerTeam)
+    .map((p) => p.name);
+
+  const wrongPlayers = pickRandomExcluding(teammates, uniqueScorers, 2);
+
+  // Fallback: if not enough teammates, use players from the other team in the match
+  if (wrongPlayers.length < 2) {
+    const otherTeam = scorerTeam === match.homeTeam ? match.awayTeam : match.homeTeam;
+    const otherPlayers = players
+      .filter((p) => p.team === otherTeam)
+      .map((p) => p.name);
+    const extra = pickRandomExcluding(otherPlayers, [...uniqueScorers, ...wrongPlayers], 2 - wrongPlayers.length);
+    wrongPlayers.push(...extra);
+  }
 
   if (wrongPlayers.length < 2) return null;
 

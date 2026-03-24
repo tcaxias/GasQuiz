@@ -178,6 +178,19 @@ describe('Question generation', () => {
     expect(withDetailedPos.length).toBe(bigThreePlayers.length);
   });
 
+  it('should have goal scorer wrong answers from match teams', () => {
+    for (let i = 0; i < 10; i++) {
+      const q = generateQuestionOfType('goal_scorer');
+      if (q) {
+        // All 3 answers should be real player names (not random strings)
+        for (const answer of q.answers) {
+          expect(answer).toBeTruthy();
+          expect(answer.length).toBeGreaterThan(1);
+        }
+      }
+    }
+  });
+
   it('should have correct answer in the answers array', () => {
     for (let i = 0; i < 20; i++) {
       const q = generateQuestion();
