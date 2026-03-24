@@ -83,7 +83,7 @@ export class ResultsScene extends Scene {
     nameText.y = this.height * 0.19;
     this.container.addChild(nameText);
 
-    // Big score number — starts at 0, counts up
+    // Big score number — starts at 0, counts up (with glow effect)
     this.scoreText = new Text({
       text: '0',
       style: {
@@ -92,6 +92,12 @@ export class ResultsScene extends Scene {
         fontWeight: 'bold',
         fill: 0xffffff,
         align: 'center',
+        dropShadow: {
+          color: 0x3498db,
+          blur: 12,
+          distance: 0,
+          angle: 0,
+        },
       },
     });
     this.scoreText.anchor.set(0.5);
@@ -161,11 +167,11 @@ export class ResultsScene extends Scene {
   }
 
   private getRatingMessage(accuracy: number): string {
-    if (accuracy >= 90) return 'Craque absoluto! Sabes tudo!';
-    if (accuracy >= 70) return 'Muito bom! Grande conhecimento!';
-    if (accuracy >= 50) return 'Nada mau! Continua a tentar!';
-    if (accuracy >= 30) return 'Podes fazer melhor!';
-    return 'Precisas de ver mais futebol!';
+    if (accuracy >= 90) return '🏆 Craque absoluto! Sabes tudo!';
+    if (accuracy >= 70) return '⭐ Muito bom! Grande conhecimento!';
+    if (accuracy >= 50) return '👍 Nada mau! Continua a tentar!';
+    if (accuracy >= 30) return '💪 Podes fazer melhor!';
+    return '📺 Precisas de ver mais futebol!';
   }
 
   private spawnConfetti(): void {

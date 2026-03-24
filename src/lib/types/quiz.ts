@@ -19,6 +19,19 @@ export interface MatchResult {
 /** Player preferred foot */
 export type PlayerFoot = 'right' | 'left' | 'both';
 
+/** Detailed player position for position questions */
+export type DetailedPosition =
+  | 'guarda_redes'
+  | 'defesa_central'
+  | 'lateral_direito'
+  | 'lateral_esquerdo'
+  | 'trinco'
+  | 'medio'
+  | 'medio_ofensivo'
+  | 'extremo_direito'
+  | 'extremo_esquerdo'
+  | 'ponta_de_lanca';
+
 /** Player with shirt number and preferred foot */
 export interface Player {
   name: string;
@@ -26,6 +39,7 @@ export interface Player {
   position: PlayerPosition;
   team: string;
   foot: PlayerFoot;
+  detailedPosition?: DetailedPosition;
 }
 
 export type PlayerPosition = 'GR' | 'DEF' | 'MED' | 'AV';
@@ -65,7 +79,8 @@ export type QuestionType =
   | 'shirt_number'
   | 'goal_scorer'
   | 'player_foot'
-  | 'man_of_the_match';
+  | 'man_of_the_match'
+  | 'player_position';
 
 /** Game state */
 export interface GameState {

@@ -8,12 +8,23 @@ export type OnStartCallback = () => void;
  * Menu scene — title screen with player greeting and start button.
  * Features: breathing title animation, team-colored background.
  */
+/** A floating background particle */
+interface Particle {
+  gfx: Graphics;
+  x: number;
+  y: number;
+  speed: number;
+  swayPhase: number;
+  swaySpeed: number;
+}
+
 export class MenuScene extends Scene {
   private onStart: OnStartCallback;
   private playerName: string;
   private favoriteTeam: string;
   private titleText!: Text;
   private elapsedMs = 0;
+  private particles: Particle[] = [];
 
   constructor(
     app: import('pixi.js').Application,
@@ -56,7 +67,7 @@ export class MenuScene extends Scene {
 
     // Subtitle
     const subtitle = new Text({
-      text: 'Quiz da Primeira Liga 2025-26',
+      text: 'Quiz de Futebol Português 2025-26',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.s(22),
@@ -125,8 +136,40 @@ export class MenuScene extends Scene {
     this.container.addChild(instructions);
 
     // Start button
-    const button = this.createButton('Jogar', this.centerX, this.height * 0.74, colors.secondary);
+    // Floating background particles
+    this.spawnParticles(colors.secondary);
+
+    const button = this.createButton('⚽ Jogar', this.centerX, this.height * 0.74, colors.secondary);
     this.container.addChild(button);
+  }
+
+  private spawnParticles(color: number): void {
+    this.particles = [];
+    const count = 18;
+    for (let i = 0; i < count; i++) {
+      const gfx = new Graphics();
+      const size = this.s(3 + Math.random() * 5);
+      gfx.circle(0, 0, size);
+      gfx.fill(color);
+      gfx.alpha = 0.06 + Math.random() * 0.06;
+
+      const x = Math.random() * this.width;
+      const y = Math.random() * this.height;
+      gfx.x = x;
+      gfx.y = y;
+
+      // Insert particles behind other content
+      this.container.addChildAt(gfx, 0);
+
+      this.particles.push({
+        gfx,
+        x,
+        y,
+        speed: this.s(0.3 + Math.random() * 0.4),
+        swayPhase: Math.random() * Math.PI * 2,
+        swaySpeed: 0.001 + Math.random() * 0.002,
+      });
+    }
   }
 
   update(deltaMs: number): void {
@@ -135,6 +178,20 @@ export class MenuScene extends Scene {
     // Gentle breathing effect on title
     const breath = 1 + 0.02 * Math.sin(this.elapsedMs * 0.002);
     this.titleText.scale.set(breath);
+
+    // Animate floating particles
+    for (const p of this.particles) {
+      p.y -= p.speed * (deltaMs / 16);
+      p.swayPhase += p.swaySpeed * deltaMs;
+      p.gfx.x = p.x + Math.sin(p.swayPhase) * this.s(15);
+      p.gfx.y = p.y;
+
+      // Recycle at top
+      if (p.y < -this.s(10)) {
+        p.y = this.height + this.s(10);
+        p.x = Math.random() * this.width;
+      }
+    }
   }
 
   private createButton(label: string, x: number, y: number, color: number): Container {

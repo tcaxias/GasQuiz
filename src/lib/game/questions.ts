@@ -1,4 +1,4 @@
-import type { Question, QuestionType, PlayerFoot, Competition, MatchResult, Player, ManOfTheMatch } from '$lib/types/quiz';
+import type { Question, QuestionType, PlayerFoot, Competition, MatchResult, Player, ManOfTheMatch, DetailedPosition } from '$lib/types/quiz';
 import { matches } from '$lib/data/matches';
 import { players, getTeams, getPlayersByTeam } from '$lib/data/players';
 import { manOfTheMatch } from '$lib/data/awards';
@@ -96,8 +96,8 @@ function filterMatchesByCategory(category: QuestionCategory): MatchResult[] {
       return matches.filter(
         (m) =>
           (!m.competition || m.competition === 'liga') &&
-          !BIG_THREE.includes(m.homeTeam) &&
-          !BIG_THREE.includes(m.awayTeam),
+          (EUROPEAN_CLUBS.includes(m.homeTeam) || EUROPEAN_CLUBS.includes(m.awayTeam)) &&
+          !(BIG_THREE.includes(m.homeTeam) && BIG_THREE.includes(m.awayTeam)),
       );
   }
 }
@@ -342,6 +342,90 @@ function generateMotmFromEntries(filteredMotm: ManOfTheMatch[]): Question | null
   };
 }
 
+// ── Player position question ────────────────────────────────────────────────
+
+/** Portuguese label for a detailed position */
+function detailedPositionLabel(pos: DetailedPosition): string {
+  const labels: Record<DetailedPosition, string> = {
+    guarda_redes: 'Guarda-redes',
+    defesa_central: 'Defesa central',
+    lateral_direito: 'Lateral direito',
+    lateral_esquerdo: 'Lateral esquerdo',
+    trinco: 'Trinco',
+    medio: 'Médio centro',
+    medio_ofensivo: 'Médio ofensivo',
+    extremo_direito: 'Extremo direito',
+    extremo_esquerdo: 'Extremo esquerdo',
+    ponta_de_lanca: 'Ponta de lança',
+  };
+  return labels[pos];
+}
+
+/** Groups of positions for generating plausible wrong answers */
+const POSITION_GROUPS: DetailedPosition[][] = [
+  ['guarda_redes'],
+  ['defesa_central', 'lateral_direito', 'lateral_esquerdo'],
+  ['trinco', 'medio', 'medio_ofensivo'],
+  ['extremo_direito', 'extremo_esquerdo', 'ponta_de_lanca'],
+];
+
+/**
+ * Generate a "player position" question from a filtered set of players.
+ * Only players with detailedPosition are eligible.
+ */
+function generatePlayerPositionFromPlayers(filteredPlayers: Player[]): Question | null {
+  const eligible = filteredPlayers.filter((p) => p.detailedPosition);
+  if (eligible.length === 0) return null;
+
+  const player = pickRandom(eligible);
+  const correctPos = player.detailedPosition!;
+  const correctLabel = detailedPositionLabel(correctPos);
+
+  // Find the group this position belongs to, plus adjacent groups
+  const groupIdx = POSITION_GROUPS.findIndex((g) => g.includes(correctPos));
+  const nearbyPositions: DetailedPosition[] = [];
+  for (let i = Math.max(0, groupIdx - 1); i <= Math.min(POSITION_GROUPS.length - 1, groupIdx + 1); i++) {
+    nearbyPositions.push(...POSITION_GROUPS[i]);
+  }
+  const wrongCandidates = nearbyPositions.filter((p) => p !== correctPos);
+
+  // Shuffle and take 2
+  const wrongPositions = shuffle([...wrongCandidates]).slice(0, 2);
+  while (wrongPositions.length < 2) {
+    const allPositions: DetailedPosition[] = POSITION_GROUPS.flat();
+    const fallback = allPositions.filter((p) => p !== correctPos && !wrongPositions.includes(p));
+    wrongPositions.push(pickRandom(fallback));
+  }
+
+  const answers: [string, string, string] = [
+    correctLabel,
+    detailedPositionLabel(wrongPositions[0]),
+    detailedPositionLabel(wrongPositions[1]),
+  ];
+  const shuffledAnswers = shuffle([...answers]);
+  const correctIndex = shuffledAnswers.indexOf(correctLabel);
+
+  // Find a real match this player's team played in for context
+  const teamMatches = matches.filter(
+    (m) => m.homeTeam === player.team || m.awayTeam === player.team,
+  );
+  let matchContext = '';
+  if (teamMatches.length > 0) {
+    const m = pickRandom(teamMatches);
+    const comp = m.competition ?? 'liga';
+    const compText = comp !== 'liga' ? `${competitionLabel(comp)} — ` : '';
+    matchContext = `\n(${compText}${m.homeTeam} ${m.homeGoals}-${m.awayGoals} ${m.awayTeam})`;
+  }
+
+  return {
+    text: `Em que posição joga ${player.name}?${matchContext}`,
+    answers: shuffledAnswers as [string, string, string],
+    correctIndex,
+    type: 'player_position',
+    team: player.team,
+  };
+}
+
 // ── Legacy unfiltered generators (for backward compat) ──────────────────────
 
 function generateMatchResultQuestion(): Question | null {
@@ -398,6 +482,10 @@ function generateManOfTheMatchQuestion(): Question | null {
   return generateMotmFromEntries(manOfTheMatch);
 }
 
+function generatePlayerPositionQuestion(): Question | null {
+  return generatePlayerPositionFromPlayers(players);
+}
+
 /** Map of question type to generator function (unfiltered, for backward compat) */
 const generatorMap: Record<QuestionType, () => Question | null> = {
   match_result: generateMatchResultQuestion,
@@ -405,6 +493,7 @@ const generatorMap: Record<QuestionType, () => Question | null> = {
   goal_scorer: generateGoalScorerQuestion,
   player_foot: generatePlayerFootQuestion,
   man_of_the_match: generateManOfTheMatchQuestion,
+  player_position: generatePlayerPositionQuestion,
 };
 
 /** All available question types */
@@ -414,6 +503,7 @@ const allTypes: QuestionType[] = [
   'goal_scorer',
   'player_foot',
   'man_of_the_match',
+  'player_position',
 ];
 
 // ── QuestionGenerator class ─────────────────────────────────────────────────
@@ -500,6 +590,10 @@ export class QuestionGenerator {
     if (category === 'liga' || category === 'big') {
       types.push('man_of_the_match');
     }
+    // player_position only for categories with big three players (who have detailedPosition)
+    if (category === 'big' || category === 'champions' || category === 'europa') {
+      types.push('player_position');
+    }
     return types;
   }
 
@@ -516,6 +610,8 @@ export class QuestionGenerator {
         return generatePlayerFootFromPlayers(filterPlayersByCategory(category));
       case 'man_of_the_match':
         return generateMotmFromEntries(filterMotmByCategory(category));
+      case 'player_position':
+        return generatePlayerPositionFromPlayers(filterPlayersByCategory(category));
     }
   }
 

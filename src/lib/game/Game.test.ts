@@ -163,6 +163,21 @@ describe('Question generation', () => {
     expect(q!.text).toContain('melhor jogador');
   });
 
+  it('should generate player position questions', () => {
+    const q = generateQuestionOfType('player_position');
+    expect(q).not.toBeNull();
+    expect(q!.type).toBe('player_position');
+    expect(q!.text).toContain('posição');
+  });
+
+  it('should have detailed positions for big three players', () => {
+    const bigThreePlayers = players.filter(
+      (p) => ['FC Porto', 'SL Benfica', 'Sporting CP'].includes(p.team),
+    );
+    const withDetailedPos = bigThreePlayers.filter((p) => p.detailedPosition);
+    expect(withDetailedPos.length).toBe(bigThreePlayers.length);
+  });
+
   it('should have correct answer in the answers array', () => {
     for (let i = 0; i < 20; i++) {
       const q = generateQuestion();
