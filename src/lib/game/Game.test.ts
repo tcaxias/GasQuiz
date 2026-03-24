@@ -6,7 +6,7 @@ import { players, getTeams, getPlayersByTeam } from '$lib/data/players';
 
 describe('Game', () => {
   it('should be instantiable', () => {
-    const game = new Game();
+    const game = new Game('Test');
     expect(game).toBeDefined();
   });
 });

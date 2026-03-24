@@ -4,22 +4,26 @@ import { Scene } from './Scene';
 export type OnRestartCallback = () => void;
 
 /**
- * Results scene — shows final score after time runs out.
+ * Results scene — shows final score, accuracy, and a rating message.
+ * Fully responsive.
  */
 export class ResultsScene extends Scene {
   private onRestart: OnRestartCallback;
+  private playerName: string;
   private score: number;
   private correct: number;
   private total: number;
 
   constructor(
     app: import('pixi.js').Application,
+    playerName: string,
     score: number,
     correct: number,
     total: number,
     onRestart: OnRestartCallback,
   ) {
     super(app);
+    this.playerName = playerName;
     this.score = score;
     this.correct = correct;
     this.total = total;
@@ -27,12 +31,12 @@ export class ResultsScene extends Scene {
   }
 
   setup(): void {
-    // "Tempo esgotado!" header
+    // Header
     const header = new Text({
       text: 'Tempo esgotado!',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 48,
+        fontSize: this.s(40),
         fontWeight: 'bold',
         fill: 0xe74c3c,
         align: 'center',
@@ -40,15 +44,30 @@ export class ResultsScene extends Scene {
     });
     header.anchor.set(0.5);
     header.x = this.centerX;
-    header.y = this.height * 0.15;
+    header.y = this.height * 0.12;
     this.container.addChild(header);
 
-    // Score
+    // Player name
+    const nameText = new Text({
+      text: this.playerName,
+      style: {
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: this.s(22),
+        fill: 0x3498db,
+        align: 'center',
+      },
+    });
+    nameText.anchor.set(0.5);
+    nameText.x = this.centerX;
+    nameText.y = this.height * 0.22;
+    this.container.addChild(nameText);
+
+    // Big score number
     const scoreText = new Text({
       text: `${this.score}`,
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 96,
+        fontSize: this.s(90),
         fontWeight: 'bold',
         fill: 0xffffff,
         align: 'center',
@@ -56,21 +75,21 @@ export class ResultsScene extends Scene {
     });
     scoreText.anchor.set(0.5);
     scoreText.x = this.centerX;
-    scoreText.y = this.height * 0.32;
+    scoreText.y = this.height * 0.35;
     this.container.addChild(scoreText);
 
     const pointsLabel = new Text({
       text: 'pontos',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 24,
+        fontSize: this.s(20),
         fill: 0x888899,
         align: 'center',
       },
     });
     pointsLabel.anchor.set(0.5);
     pointsLabel.x = this.centerX;
-    pointsLabel.y = this.height * 0.4;
+    pointsLabel.y = this.height * 0.43;
     this.container.addChild(pointsLabel);
 
     // Stats
@@ -80,36 +99,38 @@ export class ResultsScene extends Scene {
       text: `Respostas corretas: ${this.correct} / ${this.total}\nPrecisão: ${accuracy}%`,
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 22,
+        fontSize: this.s(18),
         fill: 0xaaaacc,
         align: 'center',
-        lineHeight: 32,
+        lineHeight: this.s(28),
       },
     });
     statsText.anchor.set(0.5);
     statsText.x = this.centerX;
-    statsText.y = this.height * 0.53;
+    statsText.y = this.height * 0.56;
     this.container.addChild(statsText);
 
-    // Rating message
+    // Rating
     const ratingMsg = this.getRatingMessage(accuracy);
     const ratingText = new Text({
       text: ratingMsg,
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 20,
+        fontSize: this.s(18),
         fontStyle: 'italic',
         fill: 0x2ecc71,
         align: 'center',
+        wordWrap: true,
+        wordWrapWidth: this.width * 0.85,
       },
     });
     ratingText.anchor.set(0.5);
     ratingText.x = this.centerX;
-    ratingText.y = this.height * 0.64;
+    ratingText.y = this.height * 0.67;
     this.container.addChild(ratingText);
 
-    // "Jogar outra vez" button
-    const button = this.createButton('Jogar outra vez', this.centerX, this.height * 0.78);
+    // Restart button
+    const button = this.createButton('Jogar outra vez', this.centerX, this.height * 0.8);
     this.container.addChild(button);
   }
 
@@ -126,11 +147,11 @@ export class ResultsScene extends Scene {
     btnContainer.x = x;
     btnContainer.y = y;
 
-    const btnWidth = 280;
-    const btnHeight = 60;
+    const w = this.buttonWidth;
+    const h = this.buttonHeight;
 
     const bg = new Graphics();
-    bg.roundRect(-btnWidth / 2, -btnHeight / 2, btnWidth, btnHeight, 12);
+    bg.roundRect(-w / 2, -h / 2, w, h, this.s(12));
     bg.fill(0x3498db);
     btnContainer.addChild(bg);
 
@@ -138,7 +159,7 @@ export class ResultsScene extends Scene {
       text: label,
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 24,
+        fontSize: this.s(22),
         fontWeight: 'bold',
         fill: 0xffffff,
       },

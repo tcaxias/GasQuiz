@@ -2,20 +2,25 @@ import { Application } from 'pixi.js';
 import { MenuScene } from './MenuScene';
 import { QuizScene } from './QuizScene';
 import { ResultsScene } from './ResultsScene';
+import { AudioManager } from './AudioManager';
 import { Scene } from './Scene';
 import { generateQuestion } from './questions';
 
 /**
  * Main game controller.
- * Manages scene transitions and the PixiJS application lifecycle.
+ * Manages scene transitions, audio, and the PixiJS application lifecycle.
  */
 export class Game {
   private app: Application;
+  private audio: AudioManager;
+  private playerName: string;
   private currentScene: Scene | null = null;
   private tickerCallback: ((ticker: import('pixi.js').Ticker) => void) | null = null;
 
-  constructor() {
+  constructor(playerName: string) {
     this.app = new Application();
+    this.audio = new AudioManager();
+    this.playerName = playerName;
   }
 
   async init(container: HTMLElement): Promise<void> {
@@ -27,28 +32,27 @@ export class Game {
 
     container.appendChild(this.app.canvas);
 
+    // Init audio (will load sounds in the background)
+    this.audio.init();
+
     this.showMenu();
   }
 
   private switchScene(scene: Scene): void {
-    // Clean up current scene
     if (this.currentScene) {
       this.currentScene.hide();
       this.currentScene.destroy();
     }
 
-    // Remove previous ticker callback
     if (this.tickerCallback) {
       this.app.ticker.remove(this.tickerCallback);
       this.tickerCallback = null;
     }
 
-    // Set up new scene
     this.currentScene = scene;
     scene.setup();
     scene.show();
 
-    // Add update loop
     this.tickerCallback = (ticker) => {
       scene.update(ticker.deltaMS);
     };
@@ -56,20 +60,27 @@ export class Game {
   }
 
   private showMenu(): void {
-    const menuScene = new MenuScene(this.app, () => {
+    const menuScene = new MenuScene(this.app, this.playerName, () => {
       this.startQuiz();
     });
     this.switchScene(menuScene);
   }
 
   private startQuiz(): void {
+    this.audio.startMusic();
+
     const quizScene = new QuizScene(
       this.app,
       () => generateQuestion(),
-      (_result) => {
-        // Could track per-question stats here if needed
+      (result) => {
+        if (result.wasCorrect) {
+          this.audio.playGoal();
+        } else {
+          this.audio.playFail();
+        }
       },
       (score, correct, total) => {
+        this.audio.stopMusic();
         this.showResults(score, correct, total);
       },
     );
@@ -77,7 +88,7 @@ export class Game {
   }
 
   private showResults(score: number, correct: number, total: number): void {
-    const resultsScene = new ResultsScene(this.app, score, correct, total, () => {
+    const resultsScene = new ResultsScene(this.app, this.playerName, score, correct, total, () => {
       this.showMenu();
     });
     this.switchScene(resultsScene);
@@ -91,6 +102,7 @@ export class Game {
     if (this.tickerCallback) {
       this.app.ticker.remove(this.tickerCallback);
     }
+    this.audio.destroy();
     this.app.destroy(true);
   }
 }

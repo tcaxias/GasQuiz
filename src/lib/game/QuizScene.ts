@@ -15,8 +15,8 @@ export type OnAnswerCallback = (result: AnswerResult) => void;
 export type OnTimeUpCallback = (score: number, correct: number, total: number) => void;
 
 /**
- * Quiz scene — shows questions, answers, timer, score.
- * 60 seconds to answer as many questions as possible.
+ * Quiz scene — shows questions with 3 answers, timer bar, and score.
+ * Fully responsive: scales to any screen size including mobile.
  */
 export class QuizScene extends Scene {
   private onAnswer: OnAnswerCallback;
@@ -28,6 +28,7 @@ export class QuizScene extends Scene {
   private timeRemainingMs = GAME_DURATION_MS;
   private feedbackTimeMs = 0;
   private inFeedback = false;
+  private gameEnded = false;
   private currentQuestion: Question | null = null;
   private getNextQuestion: () => Question;
 
@@ -58,24 +59,23 @@ export class QuizScene extends Scene {
     this.timeRemainingMs = GAME_DURATION_MS;
     this.feedbackTimeMs = 0;
     this.inFeedback = false;
+    this.gameEnded = false;
 
     this.createTimerBar();
     this.createHUD();
     this.createQuestionArea();
     this.createAnswerButtons();
-
-    // Show first question
     this.showNextQuestion();
   }
 
   private createTimerBar(): void {
-    // Timer bar background
+    const barHeight = this.s(6);
+
     const barBg = new Graphics();
-    barBg.rect(0, 0, this.width, 8);
-    barBg.fill(0x1a1a2e);
+    barBg.rect(0, 0, this.width, barHeight);
+    barBg.fill(0x222244);
     this.container.addChild(barBg);
 
-    // Timer bar fill
     this.timerBar = new Graphics();
     this.drawTimerBar(1.0);
     this.container.addChild(this.timerBar);
@@ -84,53 +84,54 @@ export class QuizScene extends Scene {
   private drawTimerBar(fraction: number): void {
     this.timerBar.clear();
     const barWidth = this.width * Math.max(0, fraction);
+    const barHeight = this.s(6);
     const color = fraction > 0.2 ? COLOR_TIMER_BAR : COLOR_TIMER_BAR_LOW;
-    this.timerBar.rect(0, 0, barWidth, 8);
+    this.timerBar.rect(0, 0, barWidth, barHeight);
     this.timerBar.fill(color);
   }
 
   private createHUD(): void {
-    // Timer text (top-left)
+    const hudY = this.s(6) + this.s(12);
+    const hudFontSize = this.s(18);
+
     this.timerText = new Text({
       text: '1:00',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 22,
+        fontSize: hudFontSize,
         fontWeight: 'bold',
         fill: 0xffffff,
       },
     });
-    this.timerText.x = 20;
-    this.timerText.y = 20;
+    this.timerText.x = this.padding;
+    this.timerText.y = hudY;
     this.container.addChild(this.timerText);
 
-    // Score text (top-right)
     this.scoreText = new Text({
       text: 'Pontos: 0',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 22,
+        fontSize: hudFontSize,
         fontWeight: 'bold',
         fill: 0xffffff,
       },
     });
     this.scoreText.anchor.set(1, 0);
-    this.scoreText.x = this.width - 20;
-    this.scoreText.y = 20;
+    this.scoreText.x = this.width - this.padding;
+    this.scoreText.y = hudY;
     this.container.addChild(this.scoreText);
 
-    // Questions count (top-center)
     this.questionCountText = new Text({
       text: 'Pergunta 1',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 18,
+        fontSize: this.s(14),
         fill: 0x888899,
       },
     });
     this.questionCountText.anchor.set(0.5, 0);
     this.questionCountText.x = this.centerX;
-    this.questionCountText.y = 20;
+    this.questionCountText.y = hudY;
     this.container.addChild(this.questionCountText);
   }
 
@@ -139,51 +140,51 @@ export class QuizScene extends Scene {
       text: '',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 28,
+        fontSize: this.s(24),
         fontWeight: 'bold',
         fill: 0xffffff,
         align: 'center',
-        lineHeight: 36,
+        lineHeight: this.s(32),
         wordWrap: true,
-        wordWrapWidth: this.width * 0.8,
+        wordWrapWidth: this.width * 0.85,
       },
     });
     this.questionText.anchor.set(0.5);
     this.questionText.x = this.centerX;
-    this.questionText.y = this.height * 0.3;
+    this.questionText.y = this.height * 0.28;
     this.container.addChild(this.questionText);
   }
 
   private createAnswerButtons(): void {
     this.answerButtons = [];
-    const btnWidth = Math.min(400, this.width * 0.8);
-    const btnHeight = 56;
-    const btnSpacing = 16;
-    const startY = this.height * 0.52;
+    const btnW = this.buttonWidth;
+    const btnH = this.buttonHeight;
+    const spacing = this.s(12);
+    const startY = this.height * 0.5;
 
     for (let i = 0; i < 3; i++) {
-      const btn = this.createAnswerButton('', btnWidth, btnHeight);
+      const btn = this.createAnswerButton(btnW, btnH);
       btn.x = this.centerX;
-      btn.y = startY + i * (btnHeight + btnSpacing);
+      btn.y = startY + i * (btnH + spacing);
       this.container.addChild(btn);
       this.answerButtons.push(btn);
     }
   }
 
-  private createAnswerButton(label: string, width: number, height: number): Container {
+  private createAnswerButton(width: number, height: number): Container {
     const btnContainer = new Container();
 
     const bg = new Graphics();
-    bg.roundRect(-width / 2, -height / 2, width, height, 10);
+    bg.roundRect(-width / 2, -height / 2, width, height, this.s(10));
     bg.fill(COLOR_BUTTON_DEFAULT);
     bg.label = 'bg';
     btnContainer.addChild(bg);
 
     const text = new Text({
-      text: label,
+      text: '',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 22,
+        fontSize: this.s(20),
         fill: 0xffffff,
         align: 'center',
       },
@@ -196,14 +197,10 @@ export class QuizScene extends Scene {
     btnContainer.cursor = 'pointer';
 
     btnContainer.on('pointerover', () => {
-      if (!this.inFeedback) {
-        bg.tint = 0xcccccc;
-      }
+      if (!this.inFeedback) bg.tint = 0xcccccc;
     });
     btnContainer.on('pointerout', () => {
-      if (!this.inFeedback) {
-        bg.tint = 0xffffff;
-      }
+      if (!this.inFeedback) bg.tint = 0xffffff;
     });
 
     return btnContainer;
@@ -213,12 +210,10 @@ export class QuizScene extends Scene {
     this.currentQuestion = this.getNextQuestion();
     this.inFeedback = false;
 
-    // Update question text
     this.questionText.text = this.currentQuestion.text;
 
-    // Update answer buttons
-    const btnWidth = Math.min(400, this.width * 0.8);
-    const btnHeight = 56;
+    const btnW = this.buttonWidth;
+    const btnH = this.buttonHeight;
 
     for (let i = 0; i < 3; i++) {
       const btn = this.answerButtons[i];
@@ -227,22 +222,19 @@ export class QuizScene extends Scene {
 
       text.text = this.currentQuestion.answers[i];
 
-      // Reset button appearance
       bg.clear();
-      bg.roundRect(-btnWidth / 2, -btnHeight / 2, btnWidth, btnHeight, 10);
+      bg.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, this.s(10));
       bg.fill(COLOR_BUTTON_DEFAULT);
       bg.tint = 0xffffff;
 
       btn.eventMode = 'static';
       btn.cursor = 'pointer';
 
-      // Remove old listeners and add new ones
       btn.removeAllListeners('pointerdown');
-      const answerIndex = i;
-      btn.on('pointerdown', () => this.handleAnswer(answerIndex));
+      const idx = i;
+      btn.on('pointerdown', () => this.handleAnswer(idx));
     }
 
-    // Update question count
     this.questionCountText.text = `Pergunta ${this.questionsAnswered + 1}`;
   }
 
@@ -259,9 +251,8 @@ export class QuizScene extends Scene {
       this.score += 10;
     }
 
-    // Show feedback on buttons
-    const btnWidth = Math.min(400, this.width * 0.8);
-    const btnHeight = 56;
+    const btnW = this.buttonWidth;
+    const btnH = this.buttonHeight;
 
     for (let i = 0; i < 3; i++) {
       const btn = this.answerButtons[i];
@@ -272,7 +263,7 @@ export class QuizScene extends Scene {
       bg.tint = 0xffffff;
 
       bg.clear();
-      bg.roundRect(-btnWidth / 2, -btnHeight / 2, btnWidth, btnHeight, 10);
+      bg.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, this.s(10));
 
       if (i === this.currentQuestion.correctIndex) {
         bg.fill(COLOR_CORRECT);
@@ -283,10 +274,8 @@ export class QuizScene extends Scene {
       }
     }
 
-    // Update score display
     this.scoreText.text = `Pontos: ${this.score}`;
 
-    // Notify
     this.onAnswer({
       wasCorrect,
       selectedIndex,
@@ -295,25 +284,24 @@ export class QuizScene extends Scene {
   }
 
   update(deltaMs: number): void {
-    // Update timer
+    if (this.gameEnded) return;
+
     this.timeRemainingMs -= deltaMs;
     if (this.timeRemainingMs <= 0) {
       this.timeRemainingMs = 0;
+      this.gameEnded = true;
       this.onTimeUp(this.score, this.questionsCorrect, this.questionsAnswered);
       return;
     }
 
-    // Update timer display
     const seconds = Math.ceil(this.timeRemainingMs / 1000);
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     this.timerText.text = `${mins}:${String(secs).padStart(2, '0')}`;
 
-    // Update timer bar
     const fraction = this.timeRemainingMs / GAME_DURATION_MS;
     this.drawTimerBar(fraction);
 
-    // Handle feedback timeout
     if (this.inFeedback) {
       this.feedbackTimeMs -= deltaMs;
       if (this.feedbackTimeMs <= 0) {
