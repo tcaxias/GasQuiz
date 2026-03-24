@@ -1,7 +1,18 @@
-import { Application, Text } from 'pixi.js';
+import { Application } from 'pixi.js';
+import { MenuScene } from './MenuScene';
+import { QuizScene } from './QuizScene';
+import { ResultsScene } from './ResultsScene';
+import { Scene } from './Scene';
+import { generateQuestion } from './questions';
 
+/**
+ * Main game controller.
+ * Manages scene transitions and the PixiJS application lifecycle.
+ */
 export class Game {
   private app: Application;
+  private currentScene: Scene | null = null;
+  private tickerCallback: ((ticker: import('pixi.js').Ticker) => void) | null = null;
 
   constructor() {
     this.app = new Application();
@@ -16,24 +27,70 @@ export class Game {
 
     container.appendChild(this.app.canvas);
 
-    const title = new Text({
-      text: 'GasQuiz',
-      style: {
-        fontFamily: 'Arial',
-        fontSize: 48,
-        fill: 0xffffff,
-        align: 'center',
-      },
+    this.showMenu();
+  }
+
+  private switchScene(scene: Scene): void {
+    // Clean up current scene
+    if (this.currentScene) {
+      this.currentScene.hide();
+      this.currentScene.destroy();
+    }
+
+    // Remove previous ticker callback
+    if (this.tickerCallback) {
+      this.app.ticker.remove(this.tickerCallback);
+      this.tickerCallback = null;
+    }
+
+    // Set up new scene
+    this.currentScene = scene;
+    scene.setup();
+    scene.show();
+
+    // Add update loop
+    this.tickerCallback = (ticker) => {
+      scene.update(ticker.deltaMS);
+    };
+    this.app.ticker.add(this.tickerCallback);
+  }
+
+  private showMenu(): void {
+    const menuScene = new MenuScene(this.app, () => {
+      this.startQuiz();
     });
+    this.switchScene(menuScene);
+  }
 
-    title.anchor.set(0.5);
-    title.x = this.app.screen.width / 2;
-    title.y = this.app.screen.height / 2;
+  private startQuiz(): void {
+    const quizScene = new QuizScene(
+      this.app,
+      () => generateQuestion(),
+      (_result) => {
+        // Could track per-question stats here if needed
+      },
+      (score, correct, total) => {
+        this.showResults(score, correct, total);
+      },
+    );
+    this.switchScene(quizScene);
+  }
 
-    this.app.stage.addChild(title);
+  private showResults(score: number, correct: number, total: number): void {
+    const resultsScene = new ResultsScene(this.app, score, correct, total, () => {
+      this.showMenu();
+    });
+    this.switchScene(resultsScene);
   }
 
   destroy(): void {
+    if (this.currentScene) {
+      this.currentScene.hide();
+      this.currentScene.destroy();
+    }
+    if (this.tickerCallback) {
+      this.app.ticker.remove(this.tickerCallback);
+    }
     this.app.destroy(true);
   }
 }
