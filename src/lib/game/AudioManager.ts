@@ -19,6 +19,7 @@ export class AudioManager {
         this.loadSound('goal', '/sounds/goal.mp3'),
         this.loadSound('fail', '/sounds/fail.mp3'),
         this.loadSound('music', '/sounds/music.mp3'),
+        this.loadSound('end', '/sounds/end.mp3'),
       ]);
     } catch {
       // Audio not available — game works fine without it
@@ -104,6 +105,11 @@ export class AudioManager {
   /** Play the wrong answer sound */
   playFail(): void {
     this.play('fail');
+  }
+
+  /** Play the end-game celebration sound */
+  playEnd(): void {
+    this.play('end');
   }
 
   /** Toggle mute */

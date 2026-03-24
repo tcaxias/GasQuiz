@@ -3,10 +3,12 @@ import { Game } from './Game';
 import { generateQuestion, generateQuestionOfType } from './questions';
 import { matches } from '$lib/data/matches';
 import { players, getTeams, getPlayersByTeam } from '$lib/data/players';
+import { manOfTheMatch } from '$lib/data/awards';
+import { allTeams, teamColors, getTeamColors, defaultColors } from '$lib/data/teams';
 
 describe('Game', () => {
   it('should be instantiable', () => {
-    const game = new Game('Test');
+    const game = new Game('Test', 'FC Porto');
     expect(game).toBeDefined();
   });
 });
@@ -50,6 +52,43 @@ describe('Player data', () => {
       expect(getPlayersByTeam(team).length).toBeGreaterThanOrEqual(3);
     }
   });
+
+  it('should have foot data for all players', () => {
+    for (const p of players) {
+      expect(['right', 'left', 'both']).toContain(p.foot);
+    }
+  });
+});
+
+describe('Team colors', () => {
+  it('should have colors for all 18 teams', () => {
+    expect(allTeams).toHaveLength(18);
+    for (const team of allTeams) {
+      expect(teamColors[team]).toBeDefined();
+      expect(teamColors[team].primary).toBeTypeOf('number');
+      expect(teamColors[team].secondary).toBeTypeOf('number');
+      expect(teamColors[team].text).toBeTypeOf('number');
+    }
+  });
+
+  it('should return default colors for unknown team', () => {
+    const colors = getTeamColors('Unknown FC');
+    expect(colors).toEqual(defaultColors);
+  });
+});
+
+describe('Man of the match data', () => {
+  it('should have MOTM entries', () => {
+    expect(manOfTheMatch.length).toBeGreaterThan(5);
+  });
+
+  it('should have valid MOTM data', () => {
+    for (const motm of manOfTheMatch) {
+      expect(motm.player).toBeTruthy();
+      expect(motm.team).toBeTruthy();
+      expect(motm.jornada).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('Question generation', () => {
@@ -60,6 +99,13 @@ describe('Question generation', () => {
     expect(q.answers).toHaveLength(3);
     expect(q.correctIndex).toBeGreaterThanOrEqual(0);
     expect(q.correctIndex).toBeLessThan(3);
+  });
+
+  it('should generate a question with favorite team', () => {
+    const q = generateQuestion('FC Porto');
+    expect(q).toBeDefined();
+    expect(q.text).toBeTruthy();
+    expect(q.answers).toHaveLength(3);
   });
 
   it('should generate match result questions', () => {
@@ -81,6 +127,20 @@ describe('Question generation', () => {
     expect(q).not.toBeNull();
     expect(q!.type).toBe('goal_scorer');
     expect(q!.text).toContain('marcou');
+  });
+
+  it('should generate player foot questions', () => {
+    const q = generateQuestionOfType('player_foot');
+    expect(q).not.toBeNull();
+    expect(q!.type).toBe('player_foot');
+    expect(q!.text).toContain('pé preferido');
+  });
+
+  it('should generate man of the match questions', () => {
+    const q = generateQuestionOfType('man_of_the_match');
+    expect(q).not.toBeNull();
+    expect(q!.type).toBe('man_of_the_match');
+    expect(q!.text).toContain('melhor jogador');
   });
 
   it('should have correct answer in the answers array', () => {

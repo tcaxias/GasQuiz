@@ -5,6 +5,7 @@ import { ResultsScene } from './ResultsScene';
 import { AudioManager } from './AudioManager';
 import { Scene } from './Scene';
 import { generateQuestion } from './questions';
+import { getTeamColors, defaultColors } from '$lib/data/teams';
 
 /**
  * Main game controller.
@@ -14,19 +15,23 @@ export class Game {
   private app: Application;
   private audio: AudioManager;
   private playerName: string;
+  private favoriteTeam: string;
   private currentScene: Scene | null = null;
   private tickerCallback: ((ticker: import('pixi.js').Ticker) => void) | null = null;
 
-  constructor(playerName: string) {
+  constructor(playerName: string, favoriteTeam: string) {
     this.app = new Application();
     this.audio = new AudioManager();
     this.playerName = playerName;
+    this.favoriteTeam = favoriteTeam;
   }
 
   async init(container: HTMLElement): Promise<void> {
+    const colors = this.favoriteTeam ? getTeamColors(this.favoriteTeam) : defaultColors;
+
     await this.app.init({
       resizeTo: container,
-      background: '#1a1a2e',
+      background: colors.primary,
       antialias: true,
     });
 
@@ -60,7 +65,7 @@ export class Game {
   }
 
   private showMenu(): void {
-    const menuScene = new MenuScene(this.app, this.playerName, () => {
+    const menuScene = new MenuScene(this.app, this.playerName, this.favoriteTeam, () => {
       this.startQuiz();
     });
     this.switchScene(menuScene);
@@ -69,9 +74,10 @@ export class Game {
   private startQuiz(): void {
     this.audio.startMusic();
 
+    const team = this.favoriteTeam;
     const quizScene = new QuizScene(
       this.app,
-      () => generateQuestion(),
+      () => generateQuestion(team),
       (result) => {
         if (result.wasCorrect) {
           this.audio.playGoal();
@@ -81,6 +87,7 @@ export class Game {
       },
       (score, correct, total) => {
         this.audio.stopMusic();
+        this.audio.playEnd();
         this.showResults(score, correct, total);
       },
     );

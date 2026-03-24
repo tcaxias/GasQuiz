@@ -1,6 +1,10 @@
-import type { Question, QuestionType } from '$lib/types/quiz';
+import type { Question, QuestionType, PlayerFoot } from '$lib/types/quiz';
 import { matches } from '$lib/data/matches';
 import { players, getTeams, getPlayersByTeam } from '$lib/data/players';
+import { manOfTheMatch } from '$lib/data/awards';
+
+/** The big three clubs — get 2x weight unless they're the favorite (which gets 3x) */
+const BIG_THREE = ['FC Porto', 'SL Benfica', 'Sporting CP'];
 
 /** Pick a random element from an array */
 function pickRandom<T>(arr: T[]): T {
@@ -23,10 +27,21 @@ function pickRandomExcluding<T>(arr: T[], exclude: T[], count: number): T[] {
   return shuffled.slice(0, count);
 }
 
+/** Portuguese label for a foot value */
+function footLabel(foot: PlayerFoot): string {
+  switch (foot) {
+    case 'right':
+      return 'Direito';
+    case 'left':
+      return 'Esquerdo';
+    case 'both':
+      return 'Ambos';
+  }
+}
+
 /**
  * Generate a "match result" question.
  * "Qual foi o resultado de [Home] vs [Away] (Jornada X)?"
- * Correct: "2-1", Wrong: two other plausible scores.
  */
 function generateMatchResultQuestion(): Question | null {
   if (matches.length === 0) return null;
@@ -34,7 +49,6 @@ function generateMatchResultQuestion(): Question | null {
   const match = pickRandom(matches);
   const correctScore = `${match.homeGoals}-${match.awayGoals}`;
 
-  // Generate plausible wrong scores
   const wrongScores = generateWrongScores(match.homeGoals, match.awayGoals);
 
   const answers: [string, string, string] = [correctScore, wrongScores[0], wrongScores[1]];
@@ -46,6 +60,7 @@ function generateMatchResultQuestion(): Question | null {
     answers: shuffledAnswers as [string, string, string],
     correctIndex,
     type: 'match_result',
+    team: match.homeTeam,
   };
 }
 
@@ -54,7 +69,6 @@ function generateWrongScores(homeGoals: number, awayGoals: number): [string, str
   const scores = new Set<string>();
   const correct = `${homeGoals}-${awayGoals}`;
 
-  // Generate wrong scores by tweaking goals +-1 or +-2
   const attempts = [
     `${homeGoals + 1}-${awayGoals}`,
     `${homeGoals}-${awayGoals + 1}`,
@@ -63,7 +77,7 @@ function generateWrongScores(homeGoals: number, awayGoals: number): [string, str
     `${homeGoals}-${Math.max(0, awayGoals - 1)}`,
     `${homeGoals + 2}-${awayGoals}`,
     `${homeGoals}-${awayGoals + 2}`,
-    `${awayGoals}-${homeGoals}`, // swapped score
+    `${awayGoals}-${homeGoals}`,
     `${Math.max(0, homeGoals - 1)}-${Math.max(0, awayGoals - 1)}`,
   ];
 
@@ -74,7 +88,6 @@ function generateWrongScores(homeGoals: number, awayGoals: number): [string, str
     if (scores.size >= 2) break;
   }
 
-  // Fallback if we somehow don't have 2
   while (scores.size < 2) {
     const s = `${Math.floor(Math.random() * 4)}-${Math.floor(Math.random() * 3)}`;
     if (s !== correct && !scores.has(s)) scores.add(s);
@@ -87,7 +100,6 @@ function generateWrongScores(homeGoals: number, awayGoals: number): [string, str
 /**
  * Generate a "shirt number" question.
  * "Qual é o número da camisola de [Player] no [Team]?"
- * Correct: "19", Wrong: two other numbers from the same team.
  */
 function generateShirtNumberQuestion(): Question | null {
   if (players.length === 0) return null;
@@ -95,7 +107,6 @@ function generateShirtNumberQuestion(): Question | null {
   const teams = getTeams();
   if (teams.length === 0) return null;
 
-  // Pick a team that has at least 3 players (so we can generate 2 wrong answers)
   const viableTeams = teams.filter((t) => getPlayersByTeam(t).length >= 3);
   if (viableTeams.length === 0) return null;
 
@@ -104,14 +115,12 @@ function generateShirtNumberQuestion(): Question | null {
   const player = pickRandom(teamPlayers);
   const correctNumber = String(player.number);
 
-  // Get wrong numbers from other players on the same team
   const otherNumbers = teamPlayers
     .filter((p) => p.name !== player.name)
     .map((p) => String(p.number));
 
   const wrongNumbers = pickRandomExcluding(otherNumbers, [correctNumber], 2);
 
-  // If not enough wrong numbers from same team, add random numbers
   while (wrongNumbers.length < 2) {
     const rnd = String(Math.floor(Math.random() * 40) + 1);
     if (rnd !== correctNumber && !wrongNumbers.includes(rnd)) {
@@ -128,16 +137,15 @@ function generateShirtNumberQuestion(): Question | null {
     answers: shuffledAnswers as [string, string, string],
     correctIndex,
     type: 'shirt_number',
+    team,
   };
 }
 
 /**
  * Generate a "goal scorer" question.
  * "Quem marcou golo no jogo [Home] [H]-[A] [Away]?"
- * Correct: a scorer, Wrong: two players who didn't score.
  */
 function generateGoalScorerQuestion(): Question | null {
-  // Only consider matches where at least one goal was scored
   const matchesWithGoals = matches.filter(
     (m) => m.homeScorers.length > 0 || m.awayScorers.length > 0,
   );
@@ -147,12 +155,10 @@ function generateGoalScorerQuestion(): Question | null {
   const allScorers = [...match.homeScorers, ...match.awayScorers];
   const correctScorer = pickRandom(allScorers);
 
-  // Get wrong answers: players who did NOT score in this match
   const allPlayerNames = players.map((p) => p.name);
   const uniqueScorers = [...new Set(allScorers)];
   const wrongPlayers = pickRandomExcluding(allPlayerNames, uniqueScorers, 2);
 
-  // Fallback if not enough players in dataset
   if (wrongPlayers.length < 2) return null;
 
   const answers: [string, string, string] = [correctScorer, wrongPlayers[0], wrongPlayers[1]];
@@ -164,29 +170,127 @@ function generateGoalScorerQuestion(): Question | null {
     answers: shuffledAnswers as [string, string, string],
     correctIndex,
     type: 'goal_scorer',
+    team: match.homeTeam,
   };
 }
 
-/** All available question generator functions */
-const generators: (() => Question | null)[] = [
-  generateMatchResultQuestion,
-  generateShirtNumberQuestion,
-  generateGoalScorerQuestion,
+/**
+ * Generate a "player foot" question.
+ * "Qual é o pé preferido de [Player]?"
+ */
+function generatePlayerFootQuestion(): Question | null {
+  if (players.length === 0) return null;
+
+  const player = pickRandom(players);
+  const correctFoot = footLabel(player.foot);
+
+  const allFeet: PlayerFoot[] = ['right', 'left', 'both'];
+  const wrongFeet = allFeet.filter((f) => f !== player.foot).map(footLabel);
+
+  const answers: [string, string, string] = [correctFoot, wrongFeet[0], wrongFeet[1]];
+  const shuffledAnswers = shuffle([...answers]);
+  const correctIndex = shuffledAnswers.indexOf(correctFoot);
+
+  return {
+    text: `Qual é o pé preferido de ${player.name}\n(${player.team})?`,
+    answers: shuffledAnswers as [string, string, string],
+    correctIndex,
+    type: 'player_foot',
+    team: player.team,
+  };
+}
+
+/**
+ * Generate a "man of the match" question.
+ * "Quem foi o melhor jogador do jogo [Home] H-A [Away]?"
+ * Uses hat-trick performers as unambiguous MOTMs.
+ */
+function generateManOfTheMatchQuestion(): Question | null {
+  if (manOfTheMatch.length === 0) return null;
+
+  const motm = pickRandom(manOfTheMatch);
+  const correctPlayer = motm.player;
+
+  // Get wrong answers from players who played in that match's teams
+  const homePlayers = getPlayersByTeam(motm.homeTeam).map((p) => p.name);
+  const awayPlayers = getPlayersByTeam(motm.awayTeam).map((p) => p.name);
+  const matchPlayers = [...homePlayers, ...awayPlayers];
+
+  const wrongPlayers = pickRandomExcluding(matchPlayers, [correctPlayer], 2);
+
+  // Fallback to any players if not enough from the match teams
+  if (wrongPlayers.length < 2) {
+    const allNames = players.map((p) => p.name);
+    const extra = pickRandomExcluding(allNames, [correctPlayer, ...wrongPlayers], 2 - wrongPlayers.length);
+    wrongPlayers.push(...extra);
+  }
+
+  if (wrongPlayers.length < 2) return null;
+
+  const answers: [string, string, string] = [correctPlayer, wrongPlayers[0], wrongPlayers[1]];
+  const shuffledAnswers = shuffle([...answers]);
+  const correctIndex = shuffledAnswers.indexOf(correctPlayer);
+
+  return {
+    text: `Quem foi o melhor jogador do jogo\n${motm.homeTeam} ${motm.homeGoals}-${motm.awayGoals} ${motm.awayTeam}?\n(Jornada ${motm.jornada})`,
+    answers: shuffledAnswers as [string, string, string],
+    correctIndex,
+    type: 'man_of_the_match',
+    team: motm.team,
+  };
+}
+
+/** Map of question type to generator function */
+const generatorMap: Record<QuestionType, () => Question | null> = {
+  match_result: generateMatchResultQuestion,
+  shirt_number: generateShirtNumberQuestion,
+  goal_scorer: generateGoalScorerQuestion,
+  player_foot: generatePlayerFootQuestion,
+  man_of_the_match: generateManOfTheMatchQuestion,
+};
+
+/** All available question types */
+const allTypes: QuestionType[] = [
+  'match_result',
+  'shirt_number',
+  'goal_scorer',
+  'player_foot',
+  'man_of_the_match',
 ];
 
 /**
- * Generate a random question.
- * Tries different generators until one succeeds.
+ * Generate a random question, weighted toward the favorite team.
+ *
+ * Weighting strategy:
+ * - Favorite team: 3x frequency
+ * - Big three (if not favorite): 2x frequency
+ * - Other teams: 1x frequency
+ *
+ * Implementation: generate a question, then accept/reject based on team weights.
+ * This ensures variety while still biasing toward the favorite.
  */
-export function generateQuestion(): Question {
-  const shuffledGenerators = shuffle([...generators]);
-
-  for (const gen of shuffledGenerators) {
+export function generateQuestion(favoriteTeam?: string): Question {
+  // Try up to 30 times to get a weighted question
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const type = pickRandom(allTypes);
+    const gen = generatorMap[type];
     const question = gen();
+    if (!question) continue;
+
+    // Accept based on weight
+    const weight = getTeamWeight(question.team, favoriteTeam);
+    if (Math.random() < weight) {
+      return question;
+    }
+  }
+
+  // Fallback: just generate any question
+  const shuffledTypes = shuffle([...allTypes]);
+  for (const type of shuffledTypes) {
+    const question = generatorMap[type]();
     if (question) return question;
   }
 
-  // Absolute fallback — should never happen if data is populated
   return {
     text: 'Qual é o clube mais antigo de Portugal?',
     answers: ['FC Porto', 'SL Benfica', 'Sporting CP'],
@@ -196,15 +300,19 @@ export function generateQuestion(): Question {
 }
 
 /**
+ * Get acceptance probability for a question based on team affinity.
+ * Returns a value between 0 and 1.
+ */
+function getTeamWeight(questionTeam: string | undefined, favoriteTeam?: string): number {
+  if (!questionTeam) return 0.5;
+  if (favoriteTeam && questionTeam === favoriteTeam) return 1.0; // always accept
+  if (BIG_THREE.includes(questionTeam)) return 0.66; // 2x vs baseline
+  return 0.33; // baseline
+}
+
+/**
  * Generate a question of a specific type.
  */
 export function generateQuestionOfType(type: QuestionType): Question | null {
-  switch (type) {
-    case 'match_result':
-      return generateMatchResultQuestion();
-    case 'shirt_number':
-      return generateShirtNumberQuestion();
-    case 'goal_scorer':
-      return generateGoalScorerQuestion();
-  }
+  return generatorMap[type]();
 }
