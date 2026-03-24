@@ -6,13 +6,14 @@ export type OnStartCallback = () => void;
 
 /**
  * Menu scene — title screen with player greeting and start button.
- * Background matches the favorite team colors.
- * Fully responsive: scales text and buttons to any screen size.
+ * Features: breathing title animation, team-colored background.
  */
 export class MenuScene extends Scene {
   private onStart: OnStartCallback;
   private playerName: string;
   private favoriteTeam: string;
+  private titleText!: Text;
+  private elapsedMs = 0;
 
   constructor(
     app: import('pixi.js').Application,
@@ -27,11 +28,12 @@ export class MenuScene extends Scene {
   }
 
   setup(): void {
+    this.elapsedMs = 0;
     const colors = this.favoriteTeam ? getTeamColors(this.favoriteTeam) : defaultColors;
     const textColor = colors.text;
 
     // Title
-    const title = new Text({
+    this.titleText = new Text({
       text: 'GasQuiz',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
@@ -47,10 +49,10 @@ export class MenuScene extends Scene {
         },
       },
     });
-    title.anchor.set(0.5);
-    title.x = this.centerX;
-    title.y = this.height * 0.18;
-    this.container.addChild(title);
+    this.titleText.anchor.set(0.5);
+    this.titleText.x = this.centerX;
+    this.titleText.y = this.height * 0.18;
+    this.container.addChild(this.titleText);
 
     // Subtitle
     const subtitle = new Text({
@@ -84,7 +86,7 @@ export class MenuScene extends Scene {
     greeting.y = this.height * 0.38;
     this.container.addChild(greeting);
 
-    // Favorite team badge
+    // Favorite team display
     if (this.favoriteTeam) {
       const teamBadge = new Text({
         text: this.favoriteTeam,
@@ -96,6 +98,7 @@ export class MenuScene extends Scene {
           align: 'center',
         },
       });
+      teamBadge.alpha = 0.8;
       teamBadge.anchor.set(0.5);
       teamBadge.x = this.centerX;
       teamBadge.y = this.height * 0.46;
@@ -126,6 +129,14 @@ export class MenuScene extends Scene {
     this.container.addChild(button);
   }
 
+  update(deltaMs: number): void {
+    this.elapsedMs += deltaMs;
+
+    // Gentle breathing effect on title
+    const breath = 1 + 0.02 * Math.sin(this.elapsedMs * 0.002);
+    this.titleText.scale.set(breath);
+  }
+
   private createButton(label: string, x: number, y: number, color: number): Container {
     const btnContainer = new Container();
     btnContainer.x = x;
@@ -139,7 +150,6 @@ export class MenuScene extends Scene {
     bg.fill(color);
     btnContainer.addChild(bg);
 
-    // Use dark text on light buttons, white on dark
     const btnTextColor = color === 0xffffff || color > 0xcccccc ? 0x1a1a2e : 0xffffff;
 
     const text = new Text({
@@ -158,9 +168,11 @@ export class MenuScene extends Scene {
     btnContainer.cursor = 'pointer';
 
     btnContainer.on('pointerover', () => {
+      btnContainer.scale.set(1.06);
       bg.tint = 0xdddddd;
     });
     btnContainer.on('pointerout', () => {
+      btnContainer.scale.set(1.0);
       bg.tint = 0xffffff;
     });
     btnContainer.on('pointerdown', () => {

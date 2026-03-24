@@ -11,12 +11,22 @@ const COLOR_BUTTON_DEFAULT = 0x34495e;
 const COLOR_TIMER_BAR = 0x3498db;
 const COLOR_TIMER_BAR_LOW = 0xe74c3c;
 
+/** Threshold in ms for "low time" effects */
+const LOW_TIME_MS = 10_000;
+
 export type OnAnswerCallback = (result: AnswerResult) => void;
 export type OnTimeUpCallback = (score: number, correct: number, total: number) => void;
 
+/** Floating score pop-up data */
+interface ScorePopup {
+  text: Text;
+  age: number;
+  startY: number;
+}
+
 /**
  * Quiz scene — shows questions with 3 answers, timer bar, and score.
- * Fully responsive: scales to any screen size including mobile.
+ * Features: score pop-ups, button shake on wrong, timer pulse, fade transitions.
  */
 export class QuizScene extends Scene {
   private onAnswer: OnAnswerCallback;
@@ -40,6 +50,12 @@ export class QuizScene extends Scene {
   private answerButtons: Container[] = [];
   private questionCountText!: Text;
 
+  // Animation state
+  private scorePopups: ScorePopup[] = [];
+  private shakeTargets: { btn: Container; origX: number; age: number }[] = [];
+  private questionFadeIn = 0;
+  private timerPulsePhase = 0;
+
   constructor(
     app: import('pixi.js').Application,
     getNextQuestion: () => Question,
@@ -60,6 +76,10 @@ export class QuizScene extends Scene {
     this.feedbackTimeMs = 0;
     this.inFeedback = false;
     this.gameEnded = false;
+    this.scorePopups = [];
+    this.shakeTargets = [];
+    this.questionFadeIn = 0;
+    this.timerPulsePhase = 0;
 
     this.createTimerBar();
     this.createHUD();
@@ -197,10 +217,16 @@ export class QuizScene extends Scene {
     btnContainer.cursor = 'pointer';
 
     btnContainer.on('pointerover', () => {
-      if (!this.inFeedback) bg.tint = 0xcccccc;
+      if (!this.inFeedback) {
+        btnContainer.scale.set(1.03);
+        bg.tint = 0xcccccc;
+      }
     });
     btnContainer.on('pointerout', () => {
-      if (!this.inFeedback) bg.tint = 0xffffff;
+      if (!this.inFeedback) {
+        btnContainer.scale.set(1.0);
+        bg.tint = 0xffffff;
+      }
     });
 
     return btnContainer;
@@ -209,8 +235,10 @@ export class QuizScene extends Scene {
   private showNextQuestion(): void {
     this.currentQuestion = this.getNextQuestion();
     this.inFeedback = false;
+    this.questionFadeIn = 0;
 
     this.questionText.text = this.currentQuestion.text;
+    this.questionText.alpha = 0;
 
     const btnW = this.buttonWidth;
     const btnH = this.buttonHeight;
@@ -227,6 +255,8 @@ export class QuizScene extends Scene {
       bg.fill(COLOR_BUTTON_DEFAULT);
       bg.tint = 0xffffff;
 
+      btn.scale.set(1.0);
+      btn.alpha = 0;
       btn.eventMode = 'static';
       btn.cursor = 'pointer';
 
@@ -236,6 +266,29 @@ export class QuizScene extends Scene {
     }
 
     this.questionCountText.text = `Pergunta ${this.questionsAnswered + 1}`;
+  }
+
+  /** Spawn a floating "+10" text that drifts up and fades */
+  private spawnScorePopup(x: number, y: number): void {
+    const popup = new Text({
+      text: '+10',
+      style: {
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: this.s(32),
+        fontWeight: 'bold',
+        fill: COLOR_CORRECT,
+      },
+    });
+    popup.anchor.set(0.5);
+    popup.x = x;
+    popup.y = y;
+    this.container.addChild(popup);
+    this.scorePopups.push({ text: popup, age: 0, startY: y });
+  }
+
+  /** Start shaking a button (wrong answer) */
+  private startShake(btn: Container): void {
+    this.shakeTargets.push({ btn, origX: btn.x, age: 0 });
   }
 
   private handleAnswer(selectedIndex: number): void {
@@ -249,6 +302,9 @@ export class QuizScene extends Scene {
     if (wasCorrect) {
       this.questionsCorrect++;
       this.score += 10;
+
+      // Spawn score popup near the score display
+      this.spawnScorePopup(this.width - this.padding - this.s(40), this.s(6) + this.s(12));
     }
 
     const btnW = this.buttonWidth;
@@ -261,20 +317,29 @@ export class QuizScene extends Scene {
       btn.eventMode = 'none';
       btn.cursor = 'default';
       bg.tint = 0xffffff;
+      btn.scale.set(1.0);
 
       bg.clear();
       bg.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, this.s(10));
 
       if (i === this.currentQuestion.correctIndex) {
         bg.fill(COLOR_CORRECT);
+        // Pulse the correct button up slightly
+        btn.scale.set(1.05);
       } else if (i === selectedIndex && !wasCorrect) {
         bg.fill(COLOR_WRONG);
+        // Shake the wrong button
+        this.startShake(btn);
       } else {
         bg.fill(COLOR_BUTTON_DEFAULT);
+        btn.alpha = 0.5;
       }
     }
 
     this.scoreText.text = `Pontos: ${this.score}`;
+
+    // Brief scale punch on score text
+    this.scoreText.scale.set(1.3);
 
     this.onAnswer({
       wasCorrect,
@@ -286,6 +351,58 @@ export class QuizScene extends Scene {
   update(deltaMs: number): void {
     if (this.gameEnded) return;
 
+    // ── Question / button fade-in ──────────────────────
+    if (this.questionFadeIn < 300) {
+      this.questionFadeIn += deltaMs;
+      const t = Math.min(this.questionFadeIn / 300, 1);
+      const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      this.questionText.alpha = ease;
+      for (let i = 0; i < this.answerButtons.length; i++) {
+        // Stagger each button slightly
+        const btnT = Math.min(Math.max((this.questionFadeIn - i * 50) / 250, 0), 1);
+        const btnEase = 1 - Math.pow(1 - btnT, 3);
+        this.answerButtons[i].alpha = btnEase;
+      }
+    }
+
+    // ── Score text scale recovery ──────────────────────
+    if (this.scoreText.scale.x > 1.01) {
+      const decay = Math.pow(0.92, deltaMs / 16);
+      const s = 1 + (this.scoreText.scale.x - 1) * decay;
+      this.scoreText.scale.set(s);
+    } else {
+      this.scoreText.scale.set(1.0);
+    }
+
+    // ── Score pop-ups float up and fade ────────────────
+    for (let i = this.scorePopups.length - 1; i >= 0; i--) {
+      const popup = this.scorePopups[i];
+      popup.age += deltaMs;
+      const life = popup.age / 800; // 800ms total life
+      popup.text.y = popup.startY - this.s(40) * life;
+      popup.text.alpha = 1 - life;
+      if (life >= 1) {
+        this.container.removeChild(popup.text);
+        popup.text.destroy();
+        this.scorePopups.splice(i, 1);
+      }
+    }
+
+    // ── Button shake animation ─────────────────────────
+    for (let i = this.shakeTargets.length - 1; i >= 0; i--) {
+      const shake = this.shakeTargets[i];
+      shake.age += deltaMs;
+      const shakeLife = shake.age / 400; // 400ms shake
+      if (shakeLife >= 1) {
+        shake.btn.x = shake.origX;
+        this.shakeTargets.splice(i, 1);
+      } else {
+        const intensity = this.s(6) * (1 - shakeLife);
+        shake.btn.x = shake.origX + Math.sin(shakeLife * Math.PI * 6) * intensity;
+      }
+    }
+
+    // ── Timer ──────────────────────────────────────────
     this.timeRemainingMs -= deltaMs;
     if (this.timeRemainingMs <= 0) {
       this.timeRemainingMs = 0;
@@ -302,9 +419,22 @@ export class QuizScene extends Scene {
     const fraction = this.timeRemainingMs / GAME_DURATION_MS;
     this.drawTimerBar(fraction);
 
+    // ── Timer pulse when low ───────────────────────────
+    if (this.timeRemainingMs < LOW_TIME_MS) {
+      this.timerPulsePhase += deltaMs * 0.008;
+      const pulse = 0.7 + 0.3 * Math.abs(Math.sin(this.timerPulsePhase));
+      this.timerText.alpha = pulse;
+      this.timerText.style.fill = COLOR_TIMER_BAR_LOW;
+    }
+
+    // ── Feedback → next question ───────────────────────
     if (this.inFeedback) {
       this.feedbackTimeMs -= deltaMs;
       if (this.feedbackTimeMs <= 0) {
+        // Reset button alphas
+        for (const btn of this.answerButtons) {
+          btn.alpha = 1;
+        }
         this.showNextQuestion();
       }
     }

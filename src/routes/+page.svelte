@@ -114,11 +114,11 @@
       Qual é o teu clube favorito?
     </h2>
 
-    <div class="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
+    <div class="grid w-full max-w-md grid-cols-1 gap-2.5 sm:grid-cols-2">
       {#each allTeams as team}
         <button
           onclick={() => selectTeam(team)}
-          class="rounded-xl px-4 py-3 text-base font-bold transition-all hover:scale-[1.03] hover:shadow-lg active:scale-95 sm:text-lg"
+          class="rounded-xl border border-white/20 px-4 py-3.5 text-base font-bold shadow-md transition-all duration-150 hover:scale-[1.04] hover:shadow-xl active:scale-95 sm:text-lg"
           style={teamBgStyle(team)}
         >
           {team}
