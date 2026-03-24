@@ -33,6 +33,25 @@ describe('Match data', () => {
       expect(m.awayTeam).toBeTruthy();
     }
   });
+
+  it('should have European competition matches', () => {
+    const euroMatches = matches.filter((m) => m.competition);
+    expect(euroMatches.length).toBeGreaterThan(20);
+  });
+
+  it('should have Champions League and Europa League matches', () => {
+    const cl = matches.filter((m) => m.competition === 'champions');
+    const el = matches.filter((m) => m.competition === 'europa');
+    expect(cl.length).toBeGreaterThan(0);
+    expect(el.length).toBeGreaterThan(0);
+  });
+
+  it('should have round labels for European matches', () => {
+    const euroMatches = matches.filter((m) => m.competition);
+    for (const m of euroMatches) {
+      expect(m.round).toBeTruthy();
+    }
+  });
 });
 
 describe('Player data', () => {

@@ -1,4 +1,4 @@
-import type { MatchResult } from '$lib/types/quiz';
+import type { MatchResult, Competition } from '$lib/types/quiz';
 
 type M = [number, string, string, number, number, string[], string[]];
 
@@ -11,6 +11,22 @@ function match([j, h, a, hg, ag, hs, as]: M): MatchResult {
     awayGoals: ag,
     homeScorers: hs,
     awayScorers: as,
+  };
+}
+
+type E = [number, string, string, number, number, string[], string[], Competition, string];
+
+function euroMatch([j, h, a, hg, ag, hs, as, comp, round]: E): MatchResult {
+  return {
+    jornada: j,
+    homeTeam: h,
+    awayTeam: a,
+    homeGoals: hg,
+    awayGoals: ag,
+    homeScorers: hs,
+    awayScorers: as,
+    competition: comp,
+    round,
   };
 }
 
@@ -1134,4 +1150,62 @@ export const matches: MatchResult[] = [
     ['Pedro Gonçalves', 'Pedro Gonçalves', 'Luis Suárez', 'Geny Catamo'],
   ]),
   match([27, 'SC Braga', 'FC Porto', 1, 2, ['Rodrigo Zalazar'], ['William Gomes', 'Seko Fofana']]),
+
+  // ═══════════════════════════════════════════════════════
+  // EUROPEAN COMPETITIONS 2025-26
+  // ═══════════════════════════════════════════════════════
+
+  // ── Champions League — SL Benfica ─────────────────────
+
+  // Qualifying — Third Qualifying Round
+  euroMatch([1, 'Nice', 'SL Benfica', 0, 2, [], [], 'champions', 'Qualificação - 3.ª Eliminatória, 1.ª mão']),
+  euroMatch([2, 'SL Benfica', 'Nice', 2, 0, [], [], 'champions', 'Qualificação - 3.ª Eliminatória, 2.ª mão']),
+
+  // Qualifying — Play-off Round
+  euroMatch([1, 'Fenerbahçe', 'SL Benfica', 0, 0, [], [], 'champions', 'Play-off, 1.ª mão']),
+  euroMatch([2, 'SL Benfica', 'Fenerbahçe', 1, 0, [], [], 'champions', 'Play-off, 2.ª mão']),
+
+  // Knockout Phase Play-offs
+  euroMatch([1, 'SL Benfica', 'Real Madrid', 0, 1, [], ['Vinícius Júnior'], 'champions', 'Playoff Eliminatória, 1.ª mão']),
+  euroMatch([2, 'Real Madrid', 'SL Benfica', 2, 1, ['Tchouaméni', 'Vinícius Júnior'], ['Rafa Silva'], 'champions', 'Playoff Eliminatória, 2.ª mão']),
+
+  // ── Champions League — Sporting CP ────────────────────
+
+  // Round of 16
+  euroMatch([1, 'Bodø/Glimt', 'Sporting CP', 3, 0, ['Fet', 'Blomberg', 'Høgh'], [], 'champions', 'Oitavos de Final, 1.ª mão']),
+  euroMatch([2, 'Sporting CP', 'Bodø/Glimt', 5, 0, ['Gonçalo Inácio', 'Pedro Gonçalves', 'Luis Suárez', 'Maxi Araújo', 'Nel'], [], 'champions', 'Oitavos de Final, 2.ª mão']),
+
+  // ── Europa League — SC Braga ──────────────────────────
+
+  // Qualifying — Second Qualifying Round
+  euroMatch([1, 'Levski Sofia', 'SC Braga', 0, 0, [], [], 'europa', '2.ª Eliminatória, 1.ª mão']),
+  euroMatch([2, 'SC Braga', 'Levski Sofia', 1, 0, ['Fran Navarro'], [], 'europa', '2.ª Eliminatória, 2.ª mão']),
+
+  // Qualifying — Third Qualifying Round
+  euroMatch([1, 'CFR Cluj', 'SC Braga', 1, 2, ['Sinyan'], ['Gorby', 'Gorby'], 'europa', '3.ª Eliminatória, 1.ª mão']),
+  euroMatch([2, 'SC Braga', 'CFR Cluj', 2, 0, ['Rodrigo Zalazar', 'Rodrigo Zalazar'], [], 'europa', '3.ª Eliminatória, 2.ª mão']),
+
+  // Qualifying — Play-off Round
+  euroMatch([1, 'Lincoln Red Imps', 'SC Braga', 0, 4, [], ['Víctor Gómez', 'Rodrigo Zalazar', 'Rodrigo Zalazar', 'Pau Víctor'], 'europa', 'Play-off, 1.ª mão']),
+  euroMatch([2, 'SC Braga', 'Lincoln Red Imps', 5, 1, ['Vítor Carvalho', 'Gabri Martínez', 'Gabri Martínez', 'Sandro Vidigal', 'Pau Víctor'], ['Gómez'], 'europa', 'Play-off, 2.ª mão']),
+
+  // League Phase
+  euroMatch([1, 'SC Braga', 'Feyenoord', 1, 0, [], [], 'europa', 'Fase de Liga, Jornada 1']),
+  euroMatch([2, 'Celtic', 'SC Braga', 0, 2, [], [], 'europa', 'Fase de Liga, Jornada 2']),
+  euroMatch([3, 'SC Braga', 'Estrela Vermelha', 2, 0, [], [], 'europa', 'Fase de Liga, Jornada 3']),
+  euroMatch([4, 'SC Braga', 'Genk', 3, 4, [], [], 'europa', 'Fase de Liga, Jornada 4']),
+  euroMatch([5, 'Rangers', 'SC Braga', 1, 1, [], [], 'europa', 'Fase de Liga, Jornada 5']),
+  euroMatch([6, 'Nice', 'SC Braga', 0, 1, [], [], 'europa', 'Fase de Liga, Jornada 6']),
+  euroMatch([7, 'SC Braga', 'Nottingham Forest', 1, 0, [], [], 'europa', 'Fase de Liga, Jornada 7']),
+  euroMatch([8, 'Go Ahead Eagles', 'SC Braga', 0, 0, [], [], 'europa', 'Fase de Liga, Jornada 8']),
+
+  // Round of 16
+  euroMatch([1, 'Ferencváros', 'SC Braga', 2, 0, ['Kanichowsky', 'Joseph'], [], 'europa', 'Oitavos de Final, 1.ª mão']),
+  euroMatch([2, 'SC Braga', 'Ferencváros', 4, 0, ['Ricardo Horta', 'Florian Grillitsch', 'Gabri Martínez', 'Ricardo Horta'], [], 'europa', 'Oitavos de Final, 2.ª mão']),
+
+  // ── Europa League — FC Porto ──────────────────────────
+
+  // Round of 16
+  euroMatch([1, 'VfB Stuttgart', 'FC Porto', 1, 2, ['Undav'], ['Terem Moffi', 'Rodrigo Mora'], 'europa', 'Oitavos de Final, 1.ª mão']),
+  euroMatch([2, 'FC Porto', 'VfB Stuttgart', 2, 0, ['William Gomes', 'Victor Froholdt'], [], 'europa', 'Oitavos de Final, 2.ª mão']),
 ];

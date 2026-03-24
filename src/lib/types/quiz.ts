@@ -1,4 +1,7 @@
-/** Match result from Primeira Liga */
+/** Competition type */
+export type Competition = 'liga' | 'champions' | 'europa' | 'conference';
+
+/** Match result from any competition */
 export interface MatchResult {
   jornada: number;
   homeTeam: string;
@@ -7,6 +10,10 @@ export interface MatchResult {
   awayGoals: number;
   homeScorers: string[];
   awayScorers: string[];
+  /** Competition this match belongs to. Defaults to 'liga' for Primeira Liga. */
+  competition?: Competition;
+  /** Round label for European matches (e.g. "Matchday 1", "Oitavos - 1.a mão") */
+  round?: string;
 }
 
 /** Player preferred foot */
@@ -49,6 +56,8 @@ export interface Question {
   type: QuestionType;
   /** Team associated with this question (for weighting) */
   team?: string;
+  /** Competition this question relates to (for weighting) */
+  competition?: Competition;
 }
 
 export type QuestionType =
