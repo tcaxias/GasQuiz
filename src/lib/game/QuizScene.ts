@@ -2,7 +2,7 @@ import { Text, Graphics, Container } from 'pixi.js';
 import { Scene } from './Scene';
 import type { Question, AnswerResult } from '$lib/types/quiz';
 
-const GAME_DURATION_MS = 60_000;
+const GAME_DURATION_MS = 180_000;
 const FEEDBACK_DURATION_MS = 800;
 
 const COLOR_CORRECT = 0x2ecc71;
@@ -116,7 +116,7 @@ export class QuizScene extends Scene {
     const hudFontSize = this.s(18);
 
     this.timerText = new Text({
-      text: '1:00',
+      text: '3:00',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: hudFontSize,

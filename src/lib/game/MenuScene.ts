@@ -118,7 +118,7 @@ export class MenuScene extends Scene {
 
     // Instructions
     const instructions = new Text({
-      text: 'Responde a perguntas sobre futebol português!\n1 minuto — quantas consegues acertar?',
+      text: 'Responde a perguntas sobre futebol português!\n3 minutos — quantas consegues acertar?',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.s(16),

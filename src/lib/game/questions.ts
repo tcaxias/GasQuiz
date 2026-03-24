@@ -530,8 +530,22 @@ export class QuestionGenerator {
   next(): Question {
     const category = CATEGORY_ROTATION[this.categoryIndex % CATEGORY_ROTATION.length];
 
-    // Try to generate a question matching the current category with a different type
-    const question = this.generateForCategory(category);
+    // 5x boost for favorite team: ~71% chance (5/7) to force favorite team category
+    const effectiveCategory = this.maybeFavoriteOverride(category);
+    const isFavoriteOverride = effectiveCategory !== category && this.favoriteTeam != null;
+
+    // When favorite override is active, try favorite-team-specific generation first
+    if (isFavoriteOverride) {
+      const favoriteQuestion = this.generateForFavorite();
+      if (favoriteQuestion) {
+        this.lastType = favoriteQuestion.type;
+        this.categoryIndex = (this.categoryIndex + 1) % CATEGORY_ROTATION.length;
+        return favoriteQuestion;
+      }
+    }
+
+    // Try to generate a question matching the effective category with a different type
+    const question = this.generateForCategory(effectiveCategory);
     if (question) {
       this.lastType = question.type;
       this.categoryIndex = (this.categoryIndex + 1) % CATEGORY_ROTATION.length;
@@ -612,6 +626,86 @@ export class QuestionGenerator {
         return generateMotmFromEntries(filterMotmByCategory(category));
       case 'player_position':
         return generatePlayerPositionFromPlayers(filterPlayersByCategory(category));
+    }
+  }
+
+  /**
+   * Override category to favor the player's favorite team.
+   * 5 out of 7 questions should target the favorite team's category (~71%).
+   */
+  private maybeFavoriteOverride(originalCategory: QuestionCategory): QuestionCategory {
+    if (!this.favoriteTeam) return originalCategory;
+
+    // 5 out of 7 questions should be about the favorite team's context
+    if (Math.random() < 5 / 7) {
+      return this.getFavoriteCategory();
+    }
+    return originalCategory;
+  }
+
+  /** Determine which category the favorite team belongs to. */
+  private getFavoriteCategory(): QuestionCategory {
+    if (!this.favoriteTeam) return 'liga';
+    if (CL_TEAMS.includes(this.favoriteTeam)) return 'champions';
+    if (EL_TEAMS.includes(this.favoriteTeam)) return 'europa';
+    if (BIG_THREE.includes(this.favoriteTeam)) return 'big';
+    return 'liga';
+  }
+
+  /**
+   * Try to generate a question specifically about the favorite team.
+   * Filters matches, players, and MOTM entries to only those involving the favorite club.
+   */
+  private generateForFavorite(): Question | null {
+    if (!this.favoriteTeam) return null;
+
+    // Determine which types are available for the favorite team's category
+    const category = this.getFavoriteCategory();
+    const availableTypes = this.getAvailableTypes(category);
+
+    // Filter out the last type to prevent consecutive repeats
+    const candidateTypes = availableTypes.filter((t) => t !== this.lastType);
+
+    // Try candidate types (non-repeating) first, in random order
+    for (const type of shuffle([...candidateTypes])) {
+      const question = this.generateTypedForFavorite(type);
+      if (question) return question;
+    }
+
+    // If no non-repeating type works, try all available types
+    for (const type of shuffle([...availableTypes])) {
+      const question = this.generateTypedForFavorite(type);
+      if (question) return question;
+    }
+
+    return null;
+  }
+
+  /** Generate a question of a specific type filtered to the favorite team only. */
+  private generateTypedForFavorite(type: QuestionType): Question | null {
+    if (!this.favoriteTeam) return null;
+
+    const teamMatches = matches.filter(
+      (m) => m.homeTeam === this.favoriteTeam || m.awayTeam === this.favoriteTeam,
+    );
+    const teamPlayers = players.filter((p) => p.team === this.favoriteTeam);
+    const teamMotm = manOfTheMatch.filter(
+      (m) => m.homeTeam === this.favoriteTeam || m.awayTeam === this.favoriteTeam,
+    );
+
+    switch (type) {
+      case 'match_result':
+        return generateMatchResultFromMatches(teamMatches);
+      case 'goal_scorer':
+        return generateGoalScorerFromMatches(teamMatches);
+      case 'shirt_number':
+        return generateShirtNumberFromPlayers(teamPlayers);
+      case 'player_foot':
+        return generatePlayerFootFromPlayers(teamPlayers);
+      case 'player_position':
+        return generatePlayerPositionFromPlayers(teamPlayers);
+      case 'man_of_the_match':
+        return generateMotmFromEntries(teamMotm);
     }
   }
 
