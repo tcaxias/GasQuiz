@@ -55,7 +55,8 @@ export class QuizScene extends Scene {
   private bgSprite: Sprite | null = null;
   private bgOverlay: Graphics | null = null;
   private bgMask: Graphics | null = null;
-  private bgImages: string[] = ['/images/bg1.jpg', '/images/bg2.jpg', '/images/bg3.jpg', '/images/bg4.jpg'];
+  private readonly bgImageUrls = ['/images/bg1.jpg', '/images/bg2.jpg', '/images/bg3.jpg', '/images/bg4.jpg'];
+  private loadedBgImages: string[] = [];
   private currentBgIndex = 0;
 
   // Animation state
@@ -98,19 +99,26 @@ export class QuizScene extends Scene {
   }
 
   private async loadBackgrounds(): Promise<void> {
-    for (const url of this.bgImages) {
+    for (const url of this.bgImageUrls) {
       try {
-        await Assets.load(url);
+        const texture = await Assets.load(url);
+        if (texture) {
+          this.loadedBgImages.push(url);
+        }
       } catch {
-        // Image not available — continue without it
+        // Image failed to load — skip it
       }
     }
     // Guard against scene being destroyed while loading
     if (this.gameEnded) return;
-    this.showBackground(0);
+    if (this.loadedBgImages.length > 0) {
+      this.showBackground(0);
+    }
   }
 
   private showBackground(index: number): void {
+    if (this.loadedBgImages.length === 0) return;
+
     // Remove previous background elements
     if (this.bgSprite) {
       this.container.removeChild(this.bgSprite);
@@ -128,40 +136,29 @@ export class QuizScene extends Scene {
       this.bgMask = null;
     }
 
-    const url = this.bgImages[index % this.bgImages.length];
+    const url = this.loadedBgImages[index % this.loadedBgImages.length];
     const texture = Assets.get(url);
     if (!texture) return;
 
     const sprite = new Sprite(texture);
 
-    // Cover the top portion of the screen (above buttons, roughly top 48%)
-    const bgHeight = this.height * 0.48;
-    const bgY = this.s(6); // below timer bar
-
-    // Scale to cover the area
+    // Cover the entire screen (like CSS background-size: cover)
     const scaleX = this.width / texture.width;
-    const scaleY = bgHeight / texture.height;
+    const scaleY = this.height / texture.height;
     const coverScale = Math.max(scaleX, scaleY);
     sprite.scale.set(coverScale);
+    // Center the image
     sprite.x = (this.width - texture.width * coverScale) / 2;
-    sprite.y = bgY;
+    sprite.y = (this.height - texture.height * coverScale) / 2;
 
-    // Mask to the question area rectangle
-    const mask = new Graphics();
-    mask.rect(0, bgY, this.width, bgHeight);
-    mask.fill(0xffffff);
-    sprite.mask = mask;
-    this.container.addChild(mask);
-
-    sprite.alpha = 0.25; // Semi-transparent so text is readable
+    sprite.alpha = 0.2; // Semi-transparent so text and buttons are readable
     this.container.addChildAt(sprite, 0); // Behind everything
     this.bgSprite = sprite;
-    this.bgMask = mask;
 
-    // Dark overlay for text readability
+    // Dark overlay for text readability across the full screen
     const overlay = new Graphics();
-    overlay.rect(0, bgY, this.width, bgHeight);
-    overlay.fill({ color: 0x000000, alpha: 0.4 });
+    overlay.rect(0, 0, this.width, this.height);
+    overlay.fill({ color: 0x000000, alpha: 0.45 });
     this.container.addChildAt(overlay, 1); // On top of image, behind text
     this.bgOverlay = overlay;
   }
@@ -360,9 +357,11 @@ export class QuizScene extends Scene {
     this.inFeedback = false;
     this.questionFadeIn = 0;
 
-    // Cycle to next background image
-    this.currentBgIndex = (this.currentBgIndex + 1) % this.bgImages.length;
-    this.showBackground(this.currentBgIndex);
+    // Cycle to next background image (only loaded ones)
+    if (this.loadedBgImages.length > 0) {
+      this.currentBgIndex = (this.currentBgIndex + 1) % this.loadedBgImages.length;
+      this.showBackground(this.currentBgIndex);
+    }
 
     // Update category badge
     const cat = this.getCategoryDisplay(this.currentQuestion);
