@@ -49,7 +49,6 @@ export class QuizScene extends Scene {
   private questionText!: Text;
   private answerButtons: Container[] = [];
   private questionCountText!: Text;
-  private categoryBadge!: Text;
 
   // Background images
   private bgSprite: Sprite | null = null;
@@ -237,21 +236,6 @@ export class QuizScene extends Scene {
   }
 
   private createQuestionArea(): void {
-    // Category badge above question text
-    this.categoryBadge = new Text({
-      text: '',
-      style: {
-        fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: this.s(13),
-        fontWeight: 'bold',
-        fill: 0xaaaacc,
-      },
-    });
-    this.categoryBadge.anchor.set(0.5);
-    this.categoryBadge.x = this.centerX;
-    this.categoryBadge.y = this.height * 0.17;
-    this.container.addChild(this.categoryBadge);
-
     this.questionText = new Text({
       text: '',
       style: {
@@ -343,16 +327,6 @@ export class QuizScene extends Scene {
     return btnContainer;
   }
 
-  /** Determine the category badge text and color from the current question */
-  private getCategoryDisplay(q: Question): { label: string; color: number } {
-    const BIG_THREE = ['FC Porto', 'SL Benfica', 'Sporting CP'];
-    if (q.competition === 'champions') return { label: 'Liga dos Campeões', color: 0xffd700 };
-    if (q.competition === 'europa') return { label: 'Liga Europa', color: 0xf97316 };
-    if (q.competition === 'taca') return { label: 'Taça de Portugal', color: 0x9b59b6 };
-    if (q.team && BIG_THREE.includes(q.team)) return { label: 'Primeira Liga — Grandes', color: 0x2ecc71 };
-    return { label: 'Primeira Liga', color: 0xaaaacc };
-  }
-
   private showNextQuestion(): void {
     this.currentQuestion = this.getNextQuestion();
     this.inFeedback = false;
@@ -363,12 +337,6 @@ export class QuizScene extends Scene {
       this.currentBgIndex = (this.currentBgIndex + 1) % this.loadedBgImages.length;
       this.showBackground(this.currentBgIndex);
     }
-
-    // Update category badge
-    const cat = this.getCategoryDisplay(this.currentQuestion);
-    this.categoryBadge.text = cat.label;
-    this.categoryBadge.style.fill = cat.color;
-    this.categoryBadge.alpha = 0;
 
     this.questionText.text = this.currentQuestion.text;
     this.questionText.alpha = 0;
@@ -493,7 +461,6 @@ export class QuizScene extends Scene {
       const t = Math.min(this.questionFadeIn / 300, 1);
       const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
       this.questionText.alpha = ease;
-      this.categoryBadge.alpha = ease * 0.8;
       for (let i = 0; i < this.answerButtons.length; i++) {
         // Stagger each button slightly
         const btnT = Math.min(Math.max((this.questionFadeIn - i * 50) / 250, 0), 1);
