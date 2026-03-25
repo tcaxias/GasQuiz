@@ -68,8 +68,8 @@ export class AudioManager {
     }
   }
 
-  /** Play a one-shot sound effect */
-  play(name: string): void {
+  /** Play a one-shot sound effect at the given volume (0–1) */
+  play(name: string, volume = 0.5): void {
     if (this.muted || !this.ctx || !this.buffers.has(name)) return;
 
     // Resume context if suspended (browser autoplay policy)
@@ -81,7 +81,7 @@ export class AudioManager {
     source.buffer = this.buffers.get(name)!;
 
     const gain = this.ctx.createGain();
-    gain.gain.value = 0.6;
+    gain.gain.value = volume;
     source.connect(gain);
     gain.connect(this.ctx.destination);
 
@@ -134,17 +134,17 @@ export class AudioManager {
 
   /** Play the goal celebration sound */
   playGoal(): void {
-    this.play('goal');
+    this.play('goal', 0.5);
   }
 
   /** Play the wrong answer sound */
   playFail(): void {
-    this.play('fail');
+    this.play('fail', 0.25);
   }
 
   /** Play the end-game celebration sound */
   playEnd(): void {
-    this.play('end');
+    this.play('end', 0.5);
   }
 
   /** Toggle mute */

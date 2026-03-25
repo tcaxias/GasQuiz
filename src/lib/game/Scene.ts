@@ -1,8 +1,8 @@
 import { Container, Text, Graphics } from 'pixi.js';
 import type { Application } from 'pixi.js';
 
-/** Reference design dimensions (mid-size desktop) */
-const REF_WIDTH = 800;
+/** Reference design dimensions — width targets mobile portrait (375px ≈ 0.94 scale) */
+const REF_WIDTH = 400;
 const REF_HEIGHT = 600;
 
 /** Whether the user prefers reduced motion */
