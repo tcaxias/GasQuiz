@@ -1,4 +1,4 @@
-import { Text, Graphics, Container } from 'pixi.js';
+import { Text, Graphics, Container, Sprite, Assets } from 'pixi.js';
 import { Scene } from './Scene';
 import type { Question, AnswerResult } from '$lib/types/quiz';
 
@@ -51,6 +51,13 @@ export class QuizScene extends Scene {
   private questionCountText!: Text;
   private categoryBadge!: Text;
 
+  // Background images
+  private bgSprite: Sprite | null = null;
+  private bgOverlay: Graphics | null = null;
+  private bgMask: Graphics | null = null;
+  private bgImages: string[] = ['/images/bg1.jpg', '/images/bg2.jpg', '/images/bg3.jpg', '/images/bg4.jpg'];
+  private currentBgIndex = 0;
+
   // Animation state
   private scorePopups: ScorePopup[] = [];
   private shakeTargets: { btn: Container; origX: number; age: number }[] = [];
@@ -87,6 +94,74 @@ export class QuizScene extends Scene {
     this.createQuestionArea();
     this.createAnswerButtons();
     this.showNextQuestion();
+    this.loadBackgrounds();
+  }
+
+  private async loadBackgrounds(): Promise<void> {
+    for (const url of this.bgImages) {
+      try {
+        await Assets.load(url);
+      } catch {
+        // Image not available — continue without it
+      }
+    }
+    this.showBackground(0);
+  }
+
+  private showBackground(index: number): void {
+    // Remove previous background elements
+    if (this.bgSprite) {
+      this.container.removeChild(this.bgSprite);
+      this.bgSprite.destroy();
+      this.bgSprite = null;
+    }
+    if (this.bgOverlay) {
+      this.container.removeChild(this.bgOverlay);
+      this.bgOverlay.destroy();
+      this.bgOverlay = null;
+    }
+    if (this.bgMask) {
+      this.container.removeChild(this.bgMask);
+      this.bgMask.destroy();
+      this.bgMask = null;
+    }
+
+    const url = this.bgImages[index % this.bgImages.length];
+    const texture = Assets.get(url);
+    if (!texture) return;
+
+    const sprite = new Sprite(texture);
+
+    // Cover the top portion of the screen (above buttons, roughly top 48%)
+    const bgHeight = this.height * 0.48;
+    const bgY = this.s(6); // below timer bar
+
+    // Scale to cover the area
+    const scaleX = this.width / texture.width;
+    const scaleY = bgHeight / texture.height;
+    const coverScale = Math.max(scaleX, scaleY);
+    sprite.scale.set(coverScale);
+    sprite.x = (this.width - texture.width * coverScale) / 2;
+    sprite.y = bgY;
+
+    // Mask to the question area rectangle
+    const mask = new Graphics();
+    mask.rect(0, bgY, this.width, bgHeight);
+    mask.fill(0xffffff);
+    sprite.mask = mask;
+    this.container.addChild(mask);
+
+    sprite.alpha = 0.25; // Semi-transparent so text is readable
+    this.container.addChildAt(sprite, 0); // Behind everything
+    this.bgSprite = sprite;
+    this.bgMask = mask;
+
+    // Dark overlay for text readability
+    const overlay = new Graphics();
+    overlay.rect(0, bgY, this.width, bgHeight);
+    overlay.fill({ color: 0x000000, alpha: 0.4 });
+    this.container.addChildAt(overlay, 1); // On top of image, behind text
+    this.bgOverlay = overlay;
   }
 
   private createTimerBar(): void {
@@ -282,6 +357,10 @@ export class QuizScene extends Scene {
     this.currentQuestion = this.getNextQuestion();
     this.inFeedback = false;
     this.questionFadeIn = 0;
+
+    // Cycle to next background image
+    this.currentBgIndex = (this.currentBgIndex + 1) % this.bgImages.length;
+    this.showBackground(this.currentBgIndex);
 
     // Update category badge
     const cat = this.getCategoryDisplay(this.currentQuestion);

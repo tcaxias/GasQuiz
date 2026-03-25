@@ -15,16 +15,8 @@ const CL_TEAMS = ['SL Benfica', 'Sporting CP'];
 /** Teams that play in the Europa League */
 const EL_TEAMS = ['FC Porto', 'SC Braga'];
 
-/** Question category for the rotation cycle */
-export type QuestionCategory = 'liga' | 'big' | 'europa' | 'champions';
-
-/**
- * 7-question repeating cycle:
- * 1 liga (small clubs) : 2 big three : 2 Europa League : 2 Champions League
- */
-const CATEGORY_ROTATION: QuestionCategory[] = [
-  'liga', 'big', 'big', 'europa', 'europa', 'champions', 'champions',
-];
+/** Question category for probability-based selection */
+export type QuestionCategory = 'liga' | 'big' | 'europa' | 'champions' | 'favorite';
 
 /** Pick a random element from an array */
 function pickRandom<T>(arr: T[]): T {
@@ -93,6 +85,7 @@ function filterMatchesByCategory(category: QuestionCategory): MatchResult[] {
         (m) => BIG_THREE.includes(m.homeTeam) || BIG_THREE.includes(m.awayTeam),
       );
     case 'liga':
+    case 'favorite':
       return matches.filter(
         (m) =>
           (!m.competition || m.competition === 'liga') &&
@@ -112,6 +105,7 @@ function filterPlayersByCategory(category: QuestionCategory): Player[] {
     case 'big':
       return players.filter((p) => BIG_THREE.includes(p.team));
     case 'liga':
+    case 'favorite':
       return players.filter((p) => !BIG_THREE.includes(p.team));
   }
 }
@@ -124,6 +118,7 @@ function filterMotmByCategory(category: QuestionCategory): ManOfTheMatch[] {
         (m) => BIG_THREE.includes(m.homeTeam) || BIG_THREE.includes(m.awayTeam),
       );
     case 'liga':
+    case 'favorite':
       return manOfTheMatch.filter(
         (m) => !BIG_THREE.includes(m.homeTeam) && !BIG_THREE.includes(m.awayTeam),
       );
@@ -528,63 +523,68 @@ const allTypes: QuestionType[] = [
 // ── QuestionGenerator class ─────────────────────────────────────────────────
 
 /**
- * Stateful question generator with structured category rotation
+ * Stateful question generator with probability-based category selection
  * and no consecutive same-type questions.
  *
- * Uses a 7-question repeating cycle:
- *   liga → big → big → europa → europa → champions → champions
+ * Distribution (with favorite team): 30% favorite, 35% CL, 30% EL, 5% liga
+ * Distribution (without favorite):   50% CL, 43% EL, 7% liga
  */
 export class QuestionGenerator {
-  private categoryIndex: number;
   private lastType: QuestionType | null = null;
   private favoriteTeam?: string;
 
   constructor(favoriteTeam?: string) {
     this.favoriteTeam = favoriteTeam;
-    // Random starting position so games don't always start the same
-    this.categoryIndex = Math.floor(Math.random() * CATEGORY_ROTATION.length);
   }
 
-  /** Generate the next question, respecting category rotation and type diversity. */
+  /** Pick a category based on probability distribution. */
+  private pickCategory(): QuestionCategory {
+    const roll = Math.random();
+
+    if (this.favoriteTeam) {
+      // 30% favorite, 35% CL, 30% EL, 5% liga
+      if (roll < 0.30) return 'favorite';
+      if (roll < 0.65) return 'champions';
+      if (roll < 0.95) return 'europa';
+      return 'liga';
+    } else {
+      // No favorite: 50% CL, 43% EL, 7% liga
+      if (roll < 0.50) return 'champions';
+      if (roll < 0.93) return 'europa';
+      return 'liga';
+    }
+  }
+
+  /** Generate the next question using probability-based category selection. */
   next(): Question {
-    const category = CATEGORY_ROTATION[this.categoryIndex % CATEGORY_ROTATION.length];
+    const category = this.pickCategory();
 
-    // 5x boost for favorite team: ~71% chance (5/7) to force favorite team category
-    const effectiveCategory = this.maybeFavoriteOverride(category);
-    const isFavoriteOverride = effectiveCategory !== category && this.favoriteTeam != null;
+    let question: Question | null = null;
 
-    // When favorite override is active, try favorite-team-specific generation first
-    if (isFavoriteOverride) {
-      const favoriteQuestion = this.generateForFavorite();
-      if (favoriteQuestion) {
-        this.lastType = favoriteQuestion.type;
-        this.categoryIndex = (this.categoryIndex + 1) % CATEGORY_ROTATION.length;
-        return favoriteQuestion;
-      }
+    if (category === 'favorite') {
+      question = this.generateForFavorite();
     }
 
-    // Try to generate a question matching the effective category with a different type
-    const question = this.generateForCategory(effectiveCategory);
+    if (!question) {
+      // For non-favorite or if favorite generation failed
+      const effectiveCategory = category === 'favorite' ? 'liga' : category;
+      question = this.generateForCategory(effectiveCategory);
+    }
+
     if (question) {
       this.lastType = question.type;
-      this.categoryIndex = (this.categoryIndex + 1) % CATEGORY_ROTATION.length;
       return question;
     }
 
-    // Fallback: try all other categories if this one has no viable data
-    for (let offset = 1; offset < CATEGORY_ROTATION.length; offset++) {
-      const fallbackIdx = (this.categoryIndex + offset) % CATEGORY_ROTATION.length;
-      const fallbackCategory = CATEGORY_ROTATION[fallbackIdx];
-      const fallbackQuestion = this.generateForCategory(fallbackCategory);
-      if (fallbackQuestion) {
-        this.lastType = fallbackQuestion.type;
-        this.categoryIndex = (this.categoryIndex + 1) % CATEGORY_ROTATION.length;
-        return fallbackQuestion;
+    // Fallback chain: try other categories
+    for (const fallback of (['champions', 'europa', 'big', 'liga'] as QuestionCategory[])) {
+      const q = this.generateForCategory(fallback);
+      if (q) {
+        this.lastType = q.type;
+        return q;
       }
     }
 
-    // Ultimate fallback — use unfiltered generation
-    this.categoryIndex = (this.categoryIndex + 1) % CATEGORY_ROTATION.length;
     return this.generateUnfiltered();
   }
 
@@ -649,37 +649,17 @@ export class QuestionGenerator {
   }
 
   /**
-   * Override category to favor the player's favorite team.
-   * 5 out of 7 questions should target the favorite team's category (~71%).
-   */
-  private maybeFavoriteOverride(originalCategory: QuestionCategory): QuestionCategory {
-    if (!this.favoriteTeam) return originalCategory;
-
-    // 5 out of 7 questions should be about the favorite team's context
-    if (Math.random() < 5 / 7) {
-      return this.getFavoriteCategory();
-    }
-    return originalCategory;
-  }
-
-  /** Determine which category the favorite team belongs to. */
-  private getFavoriteCategory(): QuestionCategory {
-    if (!this.favoriteTeam) return 'liga';
-    if (CL_TEAMS.includes(this.favoriteTeam)) return 'champions';
-    if (EL_TEAMS.includes(this.favoriteTeam)) return 'europa';
-    if (BIG_THREE.includes(this.favoriteTeam)) return 'big';
-    return 'liga';
-  }
-
-  /**
    * Try to generate a question specifically about the favorite team.
    * Filters matches, players, and MOTM entries to only those involving the favorite club.
    */
   private generateForFavorite(): Question | null {
     if (!this.favoriteTeam) return null;
 
-    // Determine which types are available for the favorite team's category
-    const category = this.getFavoriteCategory();
+    // Determine which types are available based on the favorite team's context
+    const category: QuestionCategory = CL_TEAMS.includes(this.favoriteTeam) ? 'champions'
+      : EL_TEAMS.includes(this.favoriteTeam) ? 'europa'
+      : BIG_THREE.includes(this.favoriteTeam) ? 'big'
+      : 'liga';
     const availableTypes = this.getAvailableTypes(category);
 
     // Filter out the last type to prevent consecutive repeats
