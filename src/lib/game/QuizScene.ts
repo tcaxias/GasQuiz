@@ -348,6 +348,7 @@ export class QuizScene extends Scene {
     const BIG_THREE = ['FC Porto', 'SL Benfica', 'Sporting CP'];
     if (q.competition === 'champions') return { label: 'Liga dos Campeões', color: 0xffd700 };
     if (q.competition === 'europa') return { label: 'Liga Europa', color: 0xf97316 };
+    if (q.competition === 'taca') return { label: 'Taça de Portugal', color: 0x9b59b6 };
     if (q.team && BIG_THREE.includes(q.team)) return { label: 'Primeira Liga — Grandes', color: 0x2ecc71 };
     return { label: 'Primeira Liga', color: 0xaaaacc };
   }

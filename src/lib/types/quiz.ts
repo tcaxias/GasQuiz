@@ -1,5 +1,5 @@
 /** Competition type */
-export type Competition = 'liga' | 'champions' | 'europa' | 'conference';
+export type Competition = 'liga' | 'champions' | 'europa' | 'conference' | 'taca';
 
 /** Match result from any competition */
 export interface MatchResult {

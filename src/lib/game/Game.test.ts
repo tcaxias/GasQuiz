@@ -46,7 +46,25 @@ describe('Match data', () => {
     expect(el.length).toBeGreaterThan(0);
   });
 
-  it('should have round labels for European matches', () => {
+  it('should have Taça de Portugal matches', () => {
+    const taca = matches.filter((m) => m.competition === 'taca');
+    expect(taca.length).toBeGreaterThan(10);
+  });
+
+  it('should have Taça de Portugal matches from multiple rounds', () => {
+    const taca = matches.filter((m) => m.competition === 'taca');
+    const rounds = new Set(taca.map((m) => m.round));
+    expect(rounds.size).toBeGreaterThanOrEqual(3); // Quinta Eliminatória, Quartos de Final, Meias-Finais
+  });
+
+  it('should have Taça de Portugal matches with goal scorers', () => {
+    const tacaWithGoals = matches.filter(
+      (m) => m.competition === 'taca' && (m.homeScorers.length > 0 || m.awayScorers.length > 0),
+    );
+    expect(tacaWithGoals.length).toBeGreaterThan(4);
+  });
+
+  it('should have round labels for European and Taça matches', () => {
     const euroMatches = matches.filter((m) => m.competition);
     for (const m of euroMatches) {
       expect(m.round).toBeTruthy();
@@ -260,6 +278,20 @@ describe('QuestionGenerator', () => {
     // No consecutive same-type even with favorite team
     for (let i = 1; i < questions.length; i++) {
       expect(questions[i].type).not.toBe(questions[i - 1].type);
+    }
+  });
+
+  it('can produce Taça de Portugal questions', () => {
+    // Generate enough questions to statistically hit the 5-7% taça probability
+    const generator = new QuestionGenerator();
+    const questions = Array.from({ length: 200 }, () => generator.next());
+
+    const tacaQuestions = questions.filter((q) => q.competition === 'taca');
+    expect(tacaQuestions.length).toBeGreaterThan(0);
+
+    // Verify taça questions mention Taça de Portugal in the text
+    for (const q of tacaQuestions) {
+      expect(q.text).toContain('Taça de Portugal');
     }
   });
 });

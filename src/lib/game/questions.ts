@@ -16,7 +16,7 @@ const CL_TEAMS = ['SL Benfica', 'Sporting CP'];
 const EL_TEAMS = ['FC Porto', 'SC Braga'];
 
 /** Question category for probability-based selection */
-export type QuestionCategory = 'liga' | 'big' | 'europa' | 'champions' | 'favorite';
+export type QuestionCategory = 'liga' | 'big' | 'europa' | 'champions' | 'taca' | 'favorite';
 
 /** Pick a random element from an array */
 function pickRandom<T>(arr: T[]): T {
@@ -60,6 +60,8 @@ function competitionLabel(comp?: Competition): string {
       return 'Liga Europa';
     case 'conference':
       return 'Liga Conferência';
+    case 'taca':
+      return 'Taça de Portugal';
     default:
       return 'Primeira Liga';
   }
@@ -80,6 +82,8 @@ function filterMatchesByCategory(category: QuestionCategory): MatchResult[] {
       return matches.filter((m) => m.competition === 'champions');
     case 'europa':
       return matches.filter((m) => m.competition === 'europa');
+    case 'taca':
+      return matches.filter((m) => m.competition === 'taca');
     case 'big':
       return matches.filter(
         (m) => BIG_THREE.includes(m.homeTeam) || BIG_THREE.includes(m.awayTeam),
@@ -102,6 +106,9 @@ function filterPlayersByCategory(category: QuestionCategory): Player[] {
       return players.filter((p) => CL_TEAMS.includes(p.team));
     case 'europa':
       return players.filter((p) => EL_TEAMS.includes(p.team));
+    case 'taca':
+      // Taça de Portugal involves all teams — use the full set
+      return players;
     case 'big':
       return players.filter((p) => BIG_THREE.includes(p.team));
     case 'liga':
@@ -122,9 +129,10 @@ function filterMotmByCategory(category: QuestionCategory): ManOfTheMatch[] {
       return manOfTheMatch.filter(
         (m) => !BIG_THREE.includes(m.homeTeam) && !BIG_THREE.includes(m.awayTeam),
       );
-    // No MOTM data for European competitions
+    // No MOTM data for European competitions or Taça de Portugal
     case 'champions':
     case 'europa':
+    case 'taca':
       return [];
   }
 }
@@ -526,8 +534,8 @@ const allTypes: QuestionType[] = [
  * Stateful question generator with probability-based category selection
  * and no consecutive same-type questions.
  *
- * Distribution (with favorite team): 30% favorite, 35% CL, 30% EL, 5% liga
- * Distribution (without favorite):   50% CL, 43% EL, 7% liga
+ * Distribution (with favorite team): 30% favorite, 33% CL, 27% EL, 5% liga, 5% taça
+ * Distribution (without favorite):   47% CL, 40% EL, 6% liga, 7% taça
  */
 export class QuestionGenerator {
   private lastType: QuestionType | null = null;
@@ -542,16 +550,18 @@ export class QuestionGenerator {
     const roll = Math.random();
 
     if (this.favoriteTeam) {
-      // 30% favorite, 35% CL, 30% EL, 5% liga
+      // 30% favorite, 33% CL, 27% EL, 5% liga, 5% taça
       if (roll < 0.30) return 'favorite';
-      if (roll < 0.65) return 'champions';
-      if (roll < 0.95) return 'europa';
-      return 'liga';
+      if (roll < 0.63) return 'champions';
+      if (roll < 0.90) return 'europa';
+      if (roll < 0.95) return 'liga';
+      return 'taca';
     } else {
-      // No favorite: 50% CL, 43% EL, 7% liga
-      if (roll < 0.50) return 'champions';
-      if (roll < 0.93) return 'europa';
-      return 'liga';
+      // No favorite: 47% CL, 40% EL, 6% liga, 7% taça
+      if (roll < 0.47) return 'champions';
+      if (roll < 0.87) return 'europa';
+      if (roll < 0.93) return 'liga';
+      return 'taca';
     }
   }
 
@@ -577,7 +587,7 @@ export class QuestionGenerator {
     }
 
     // Fallback chain: try other categories
-    for (const fallback of (['champions', 'europa', 'big', 'liga'] as QuestionCategory[])) {
+    for (const fallback of (['champions', 'europa', 'taca', 'big', 'liga'] as QuestionCategory[])) {
       const q = this.generateForCategory(fallback);
       if (q) {
         this.lastType = q.type;
@@ -623,8 +633,9 @@ export class QuestionGenerator {
     if (category === 'liga' || category === 'big') {
       types.push('man_of_the_match');
     }
-    // player_position only for categories with big three players (who have detailedPosition)
-    if (category === 'big' || category === 'champions' || category === 'europa') {
+    // player_position for categories with big three players (who have detailedPosition)
+    // Taça also includes big clubs, so player_position is available
+    if (category === 'big' || category === 'champions' || category === 'europa' || category === 'taca') {
       types.push('player_position');
     }
     return types;

@@ -1208,4 +1208,27 @@ export const matches: MatchResult[] = [
   // Round of 16
   euroMatch([1, 'VfB Stuttgart', 'FC Porto', 1, 2, ['Undav'], ['Terem Moffi', 'Rodrigo Mora'], 'europa', 'Oitavos de Final, 1.ª mão']),
   euroMatch([2, 'FC Porto', 'VfB Stuttgart', 2, 0, ['William Gomes', 'Victor Froholdt'], [], 'europa', 'Oitavos de Final, 2.ª mão']),
+
+  // ═══════════════════════════════════════════════════════
+  // TAÇA DE PORTUGAL 2025-26
+  // ═══════════════════════════════════════════════════════
+
+  // ── Quinta Eliminatória (Oitavos de Final) ────────────
+  // Most matches lack individual scorer data — only include those with known results
+  euroMatch([1, 'Vitória SC', 'AVS', 0, 1, [], [], 'taca', 'Quinta Eliminatória']),
+  euroMatch([1, 'Farense', 'SL Benfica', 0, 2, [], [], 'taca', 'Quinta Eliminatória']),
+  euroMatch([1, 'Casa Pia', 'Torreense', 1, 2, [], [], 'taca', 'Quinta Eliminatória']),
+  euroMatch([1, 'Santa Clara', 'Sporting CP', 2, 3, [], [], 'taca', 'Quinta Eliminatória (a.p.t.)']),
+  euroMatch([1, 'FC Porto', 'FC Famalicão', 4, 1, [], [], 'taca', 'Quinta Eliminatória']),
+  euroMatch([1, 'Caldas', 'SC Braga', 0, 3, [], [], 'taca', 'Quinta Eliminatória']),
+
+  // ── Quartos de Final ──────────────────────────────────
+  euroMatch([1, 'Torreense', 'União de Leiria', 3, 1, ['Kévin Zohi', 'Kévin Zohi', 'Musa Drammeh'], ['Pablo Fernández'], 'taca', 'Quartos de Final']),
+  euroMatch([1, 'AD Fafe', 'SC Braga', 2, 1, ['João Santos', 'Carlos Silva'], ['Mario Dorgeles'], 'taca', 'Quartos de Final']),
+  euroMatch([1, 'FC Porto', 'SL Benfica', 1, 0, ['Jan Bednarek'], [], 'taca', 'Quartos de Final']),
+  euroMatch([1, 'Sporting CP', 'AVS', 3, 2, ['Luis Guilherme', 'Geny Catamo'], ['Pedro Lima', 'Nenê'], 'taca', 'Quartos de Final (a.p.t.)']),
+
+  // ── Meias-Finais (1.ª mão) ────────────────────────────
+  euroMatch([1, 'AD Fafe', 'Torreense', 1, 1, ['João Oliveira'], ['Manu Pozo'], 'taca', 'Meias-Finais, 1.ª mão']),
+  euroMatch([1, 'Sporting CP', 'FC Porto', 1, 0, ['Luis Suárez'], [], 'taca', 'Meias-Finais, 1.ª mão']),
 ];
