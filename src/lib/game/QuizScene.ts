@@ -222,7 +222,7 @@ export class QuizScene extends Scene {
     this.container.addChild(this.scoreText);
 
     this.questionCountText = new Text({
-      text: 'Pergunta 1',
+      text: '',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.s(14),
@@ -369,7 +369,7 @@ export class QuizScene extends Scene {
       btn.on('pointerdown', () => this.handleAnswer(idx));
     }
 
-    this.questionCountText.text = `Pergunta ${this.questionsAnswered + 1}`;
+    this.updateStatsText();
   }
 
   /** Spawn a floating "+10" text that drifts up and fades */
@@ -393,6 +393,16 @@ export class QuizScene extends Scene {
   /** Start shaking a button (wrong answer) */
   private startShake(btn: Container): void {
     this.shakeTargets.push({ btn, origX: btn.x, age: 0 });
+  }
+
+  /** Update the center HUD with questions answered, correct, and percentage */
+  private updateStatsText(): void {
+    if (this.questionsAnswered === 0) {
+      this.questionCountText.text = '';
+      return;
+    }
+    const pct = Math.round((this.questionsCorrect / this.questionsAnswered) * 100);
+    this.questionCountText.text = `${this.questionsCorrect}/${this.questionsAnswered} certas · ${pct}%`;
   }
 
   private handleAnswer(selectedIndex: number): void {
@@ -441,6 +451,7 @@ export class QuizScene extends Scene {
     }
 
     this.scoreText.text = `Pontos: ${this.score}`;
+    this.updateStatsText();
 
     // Brief scale punch on score text
     this.scoreText.scale.set(1.3);
