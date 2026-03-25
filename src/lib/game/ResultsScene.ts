@@ -1,5 +1,6 @@
 import { Text, Graphics } from 'pixi.js';
 import { Scene, prefersReducedMotion, isMobileDevice } from './Scene';
+import { flags } from '$lib/config';
 
 export type OnRestartCallback = () => void;
 
@@ -166,8 +167,8 @@ export class ResultsScene extends Scene {
     );
     this.container.addChild(button);
 
-    // Spawn confetti if score is decent (skip if reduced motion)
-    if (this.targetScore >= 30 && !prefersReducedMotion()) {
+    // Spawn confetti if score is decent (skip if disabled or reduced motion)
+    if (flags.resultsConfetti && this.targetScore >= 30 && !prefersReducedMotion()) {
       this.spawnConfetti();
     }
   }
@@ -237,13 +238,14 @@ export class ResultsScene extends Scene {
       }
     }
 
-    // ── Confetti physics ────────────────────────────────
+    // ── Confetti physics (frame-rate independent) ──────
+    const dt = deltaMs / 16; // normalize to ~60fps baseline
     for (let i = this.confettiParticles.length - 1; i >= 0; i--) {
       const c = this.confettiParticles[i];
-      c.vy += c.gravity;
-      c.gfx.x += c.vx;
-      c.gfx.y += c.vy;
-      c.gfx.rotation += c.va;
+      c.vy += c.gravity * dt;
+      c.gfx.x += c.vx * dt;
+      c.gfx.y += c.vy * dt;
+      c.gfx.rotation += c.va * dt;
 
       // Fade out near bottom
       if (c.gfx.y > this.height * 0.85) {

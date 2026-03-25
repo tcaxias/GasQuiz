@@ -1,6 +1,7 @@
 import { Text, Graphics } from 'pixi.js';
 import { Scene, prefersReducedMotion, isMobileDevice } from './Scene';
 import { getTeamColors, defaultColors } from '$lib/data/teams';
+import { flags, SEASON } from '$lib/config';
 
 export type OnStartCallback = () => void;
 
@@ -70,7 +71,7 @@ export class MenuScene extends Scene {
 
     // Subtitle
     const subtitle = new Text({
-      text: 'Quiz de Futebol Portugues 2025-26',
+      text: `Quiz de Futebol Portugues ${SEASON}`,
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.s(22),
@@ -188,8 +189,8 @@ export class MenuScene extends Scene {
     instructions.y = this.height * 0.62;
     this.container.addChild(instructions);
 
-    // Floating background particles (skip if user prefers reduced motion)
-    if (!prefersReducedMotion()) {
+    // Floating background particles (skip if disabled or user prefers reduced motion)
+    if (flags.menuParticles && !prefersReducedMotion()) {
       this.spawnParticles(colors.secondary);
     }
 
@@ -237,8 +238,8 @@ export class MenuScene extends Scene {
   update(deltaMs: number): void {
     this.elapsedMs += deltaMs;
 
-    // Gentle breathing effect on title (skip if reduced motion)
-    if (!prefersReducedMotion()) {
+    // Gentle breathing effect on title (skip if disabled or reduced motion)
+    if (flags.menuTitleAnimation && !prefersReducedMotion()) {
       const breath = 1 + 0.02 * Math.sin(this.elapsedMs * 0.002);
       this.titleText.scale.set(breath);
     }

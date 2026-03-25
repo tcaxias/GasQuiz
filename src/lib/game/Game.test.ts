@@ -5,6 +5,8 @@ import { matches } from '$lib/data/matches';
 import { players, getTeams, getPlayersByTeam } from '$lib/data/players';
 import { manOfTheMatch } from '$lib/data/awards';
 import { allTeams, teamColors, getTeamColors, defaultColors } from '$lib/data/teams';
+import { colorLuminance } from './Scene';
+import { flags, SEASON, SCORE_PER_CORRECT } from '$lib/config';
 
 describe('Game', () => {
   it('should be instantiable', () => {
@@ -292,6 +294,69 @@ describe('QuestionGenerator', () => {
     // Verify taça questions mention Taça de Portugal in the text
     for (const q of tacaQuestions) {
       expect(q.text).toContain('Taça de Portugal');
+    }
+  });
+});
+
+describe('colorLuminance', () => {
+  it('returns 0 for black', () => {
+    expect(colorLuminance(0x000000)).toBe(0);
+  });
+
+  it('returns 1 for white', () => {
+    expect(colorLuminance(0xffffff)).toBe(1);
+  });
+
+  it('returns higher value for light colors', () => {
+    const light = colorLuminance(0xeeeeee);
+    const dark = colorLuminance(0x222222);
+    expect(light).toBeGreaterThan(dark);
+  });
+
+  it('returns ~0.5 for mid-gray', () => {
+    const mid = colorLuminance(0x808080);
+    expect(mid).toBeGreaterThan(0.4);
+    expect(mid).toBeLessThan(0.6);
+  });
+});
+
+describe('Config', () => {
+  it('should have all feature flags defined as booleans', () => {
+    for (const [key, value] of Object.entries(flags)) {
+      expect(typeof value, `flags.${key} should be boolean`).toBe('boolean');
+    }
+  });
+
+  it('should have a valid season string', () => {
+    expect(SEASON).toMatch(/^\d{4}-\d{2}$/);
+  });
+
+  it('should have a positive score per correct answer', () => {
+    expect(SCORE_PER_CORRECT).toBeGreaterThan(0);
+  });
+});
+
+describe('Wrong score generation edge cases', () => {
+  it('should generate valid wrong scores for 0-0 draws', () => {
+    // 0-0 draws were historically problematic — many ±1 variants collapse to "0-0"
+    for (let i = 0; i < 20; i++) {
+      const q = generateQuestionOfType('match_result');
+      if (q) {
+        const correctAnswer = q.answers[q.correctIndex];
+        // All answers should be unique
+        const unique = new Set(q.answers);
+        expect(unique.size, `Duplicate answers found: ${q.answers.join(', ')}`).toBe(3);
+        // Correct answer should be in the set
+        expect(q.answers).toContain(correctAnswer);
+      }
+    }
+  });
+
+  it('should have 3 distinct answers for all question types', () => {
+    for (let i = 0; i < 50; i++) {
+      const q = generateQuestion();
+      const unique = new Set(q.answers);
+      expect(unique.size, `Duplicate answers in ${q.type}: ${q.answers.join(', ')}`).toBe(3);
     }
   });
 });

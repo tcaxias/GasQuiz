@@ -1,6 +1,7 @@
 import { Text, Graphics, Container, Sprite, Assets } from 'pixi.js';
 import { Scene, prefersReducedMotion } from './Scene';
 import type { Question, AnswerResult } from '$lib/types/quiz';
+import { flags, SCORE_PER_CORRECT } from '$lib/config';
 
 const GAME_DURATION_MS = 180_000;
 const FEEDBACK_DURATION_MS = 800;
@@ -57,7 +58,6 @@ export class QuizScene extends Scene {
   // Background images
   private bgSprite: Sprite | null = null;
   private bgOverlay: Graphics | null = null;
-  private bgMask: Graphics | null = null;
   private readonly bgImageUrls = [
     '/images/bg1.jpg',
     '/images/bg2.jpg',
@@ -108,17 +108,21 @@ export class QuizScene extends Scene {
     this.createQuestionArea();
     this.createAnswerButtons();
     this.showNextQuestion();
-    this.loadBackgrounds();
+    if (flags.backgroundImages) {
+      this.loadBackgrounds();
+    }
 
     // Keyboard support — press 1/2/3 to answer
-    this.keydownHandler = (e: KeyboardEvent) => {
-      if (this.inFeedback || this.gameEnded) return;
-      const key = e.key;
-      if (key === '1') this.handleAnswer(0);
-      else if (key === '2') this.handleAnswer(1);
-      else if (key === '3') this.handleAnswer(2);
-    };
-    window.addEventListener('keydown', this.keydownHandler);
+    if (flags.keyboardAnswers) {
+      this.keydownHandler = (e: KeyboardEvent) => {
+        if (this.inFeedback || this.gameEnded) return;
+        const key = e.key;
+        if (key === '1') this.handleAnswer(0);
+        else if (key === '2') this.handleAnswer(1);
+        else if (key === '3') this.handleAnswer(2);
+      };
+      window.addEventListener('keydown', this.keydownHandler);
+    }
   }
 
   destroy(): void {
@@ -130,10 +134,42 @@ export class QuizScene extends Scene {
     super.destroy();
   }
 
-  /** Override resize to preserve game state while re-laying out */
+  /**
+   * Re-layout all display objects on viewport resize (e.g. device rotation).
+   * Preserves game state (score, time, current question) — only repositions elements.
+   */
   resize(): void {
-    // Re-layout is complex mid-game; only redraw timer bar width (live dimension)
-    // Full re-layout would reset animations, so we only adjust what reads live dimensions
+    // ── Timer bar ────────────────────────────────────────
+    const fraction = this.timeRemainingMs / GAME_DURATION_MS;
+    this.drawTimerBar(fraction);
+
+    // ── HUD positions ────────────────────────────────────
+    const hudY = this.s(6) + this.s(12);
+    this.timerText.x = this.padding;
+    this.timerText.y = hudY;
+    this.scoreText.x = this.width - this.padding;
+    this.scoreText.y = hudY;
+    this.questionCountText.x = this.centerX;
+    this.questionCountText.y = hudY;
+
+    // ── Question text ────────────────────────────────────
+    this.questionText.x = this.centerX;
+    this.questionText.y = this.height * 0.28;
+    this.questionText.style.wordWrapWidth = this.width * 0.85;
+
+    // ── Answer buttons ───────────────────────────────────
+    const btnH = this.buttonHeight;
+    const spacing = this.s(12);
+    const startY = this.height * 0.5;
+    for (let i = 0; i < this.answerButtons.length; i++) {
+      this.answerButtons[i].x = this.centerX;
+      this.answerButtons[i].y = startY + i * (btnH + spacing);
+    }
+
+    // ── Background ───────────────────────────────────────
+    if (this.loadedBgImages.length > 0) {
+      this.showBackground(this.currentBgIndex);
+    }
   }
 
   private async loadBackgrounds(): Promise<void> {
@@ -168,12 +204,6 @@ export class QuizScene extends Scene {
       this.bgOverlay.destroy();
       this.bgOverlay = null;
     }
-    if (this.bgMask) {
-      this.container.removeChild(this.bgMask);
-      this.bgMask.destroy();
-      this.bgMask = null;
-    }
-
     const url = this.loadedBgImages[index % this.loadedBgImages.length];
     const texture = Assets.get(url);
     if (!texture) return;
@@ -415,12 +445,12 @@ export class QuizScene extends Scene {
     this.updateStatsText();
   }
 
-  /** Spawn a floating "+10" text that drifts up and fades */
+  /** Spawn a floating score pop-up that drifts up and fades */
   private spawnScorePopup(x: number, y: number): void {
-    if (prefersReducedMotion()) return;
+    if (!flags.scorePopups || prefersReducedMotion()) return;
 
     const popup = new Text({
-      text: '+10',
+      text: `+${SCORE_PER_CORRECT}`,
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.s(32),
@@ -437,7 +467,7 @@ export class QuizScene extends Scene {
 
   /** Start shaking a button (wrong answer) */
   private startShake(btn: Container): void {
-    if (prefersReducedMotion()) return;
+    if (!flags.wrongAnswerShake || prefersReducedMotion()) return;
     this.shakeTargets.push({ btn, origX: btn.x, age: 0 });
   }
 
@@ -461,7 +491,7 @@ export class QuizScene extends Scene {
     const wasCorrect = selectedIndex === this.currentQuestion.correctIndex;
     if (wasCorrect) {
       this.questionsCorrect++;
-      this.score += 10;
+      this.score += SCORE_PER_CORRECT;
 
       // Spawn score popup near the score display
       this.spawnScorePopup(this.width - this.padding - this.s(40), this.s(6) + this.s(12));
@@ -596,7 +626,7 @@ export class QuizScene extends Scene {
 
     // ── Timer pulse when low ───────────────────────────
     if (this.timeRemainingMs < LOW_TIME_MS) {
-      if (!prefersReducedMotion()) {
+      if (flags.timerPulse && !prefersReducedMotion()) {
         this.timerPulsePhase += deltaMs * 0.008;
         const pulse = 0.7 + 0.3 * Math.abs(Math.sin(this.timerPulsePhase));
         this.timerText.alpha = pulse;

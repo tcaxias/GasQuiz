@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { allTeams } from '$lib/data/teams';
-  import { getTeamColors, defaultColors } from '$lib/data/teams';
+  import { onMount, onDestroy, tick } from 'svelte';
+  import { allTeams, getTeamColors, defaultColors } from '$lib/data/teams';
+  import { SEASON } from '$lib/config';
 
   const STORAGE_KEY_NAME = 'gasquiz_player_name';
   const STORAGE_KEY_TEAM = 'gasquiz_favorite_team';
@@ -23,18 +23,19 @@
   let gameInitError = $state(false);
 
   onMount(() => {
-    const storedName = localStorage.getItem(STORAGE_KEY_NAME);
-    const storedTeam = localStorage.getItem(STORAGE_KEY_TEAM);
+    const storedName = storageGet(STORAGE_KEY_NAME);
+    const storedTeam = storageGet(STORAGE_KEY_TEAM);
 
-    // Validate stored values — guard against tampering
-    const validName = storedName && storedName.length <= MAX_NAME_LENGTH ? storedName.trim() : null;
+    // Validate stored values — sanitize and guard against tampering
+    const sanitizedStored = storedName ? sanitizeName(storedName) : null;
+    const validName = sanitizedStored && sanitizedStored.length >= 1 ? sanitizedStored : null;
     const validTeam = storedTeam && allTeams.includes(storedTeam) ? storedTeam : null;
 
     if (!validName && storedName) {
-      localStorage.removeItem(STORAGE_KEY_NAME);
+      storageRemove(STORAGE_KEY_NAME);
     }
     if (!validTeam && storedTeam) {
-      localStorage.removeItem(STORAGE_KEY_TEAM);
+      storageRemove(STORAGE_KEY_TEAM);
     }
 
     if (validName && validTeam) {
@@ -66,12 +67,39 @@
     return raw.replace(NAME_PATTERN, '').trim().slice(0, MAX_NAME_LENGTH);
   }
 
+  /** Safe localStorage getter — returns null on error (e.g. private browsing) */
+  function storageGet(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Safe localStorage setter — silently fails on error */
+  function storageSet(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Storage unavailable — game works fine without persistence
+    }
+  }
+
+  /** Safe localStorage remover */
+  function storageRemove(key: string): void {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Storage unavailable
+    }
+  }
+
   function saveName() {
     const sanitized = sanitizeName(nameInput);
     if (sanitized.length < 1) return;
     playerName = sanitized;
     nameInput = sanitized;
-    localStorage.setItem(STORAGE_KEY_NAME, playerName);
+    storageSet(STORAGE_KEY_NAME, playerName);
     screen = 'team';
   }
 
@@ -81,7 +109,7 @@
 
   function selectTeam(team: string) {
     favoriteTeam = team;
-    localStorage.setItem(STORAGE_KEY_TEAM, team);
+    storageSet(STORAGE_KEY_TEAM, team);
     updateBgColor(team);
     startGame();
   }
@@ -90,52 +118,51 @@
     screen = 'game';
     gameInitError = false;
 
-    // Use requestAnimationFrame to ensure DOM is ready
-    requestAnimationFrame(async () => {
-      if (!container) return;
+    // Wait for Svelte to flush DOM updates so container is mounted
+    await tick();
+    if (!container) return;
 
-      // Remove previous cleanup listener if any
-      if (currentCleanup) {
-        window.removeEventListener('beforeunload', currentCleanup);
-        currentCleanup = null;
-      }
+    // Remove previous cleanup listener if any
+    if (currentCleanup) {
+      window.removeEventListener('beforeunload', currentCleanup);
+      currentCleanup = null;
+    }
 
-      try {
-        // Lazy-load the game engine (and all its data dependencies) only when needed
-        const { Game } = await import('$lib/game/Game');
+    try {
+      // Lazy-load the game engine (and all its data dependencies) only when needed
+      const { Game } = await import('$lib/game/Game');
 
-        const game = new Game(
-          playerName,
-          favoriteTeam,
-          (action) => {
-            // Game already called destroy() on itself
-            if (currentCleanup) {
-              window.removeEventListener('beforeunload', currentCleanup);
-              currentCleanup = null;
-            }
-            if (action === 'name') {
-              nameInput = playerName;
-              screen = 'name';
-            } else {
-              screen = 'team';
-            }
-          },
-          (text) => {
-            ariaLiveText = text;
-          },
-        );
+      const game = new Game(
+        playerName,
+        favoriteTeam,
+        (action) => {
+          // Game already called destroy() on itself
+          if (currentCleanup) {
+            window.removeEventListener('beforeunload', currentCleanup);
+            currentCleanup = null;
+          }
+          if (action === 'name') {
+            nameInput = playerName;
+            screen = 'name';
+          } else {
+            screen = 'team';
+          }
+        },
+        (text) => {
+          ariaLiveText = text;
+        },
+      );
 
-        // Init audio inside this gesture-adjacent context (selectTeam click → rAF)
-        game.initAudio();
-        await game.init(container);
+      // Init audio inside this gesture-adjacent context (selectTeam click → tick)
+      game.initAudio();
+      await game.init(container);
 
-        currentCleanup = () => game.destroy();
-        window.addEventListener('beforeunload', currentCleanup);
-      } catch (err) {
-        console.error('Game failed to initialize:', err);
-        gameInitError = true;
-      }
-    });
+      currentCleanup = () => game.destroy();
+      window.addEventListener('beforeunload', currentCleanup);
+    } catch (err) {
+      console.error('Game failed to initialize:', err);
+      gameInitError = true;
+    }
   }
 
   function teamBgStyle(team: string): string {
@@ -152,7 +179,7 @@
     style="background-color: {bgColor}"
   >
     <h1 class="mb-2 text-5xl font-bold text-white sm:text-7xl">GasQuiz</h1>
-    <p class="mb-10 text-lg text-[#aaaacc] sm:text-xl">Quiz da Primeira Liga 2025-26</p>
+    <p class="mb-10 text-lg text-[#aaaacc] sm:text-xl">Quiz da Primeira Liga {SEASON}</p>
 
     <div class="flex w-full max-w-sm flex-col gap-4">
       <label for="name" class="text-center text-base text-[#888899]"> Como te chamas? </label>

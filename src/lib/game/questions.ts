@@ -27,8 +27,9 @@ const EL_TEAMS = ['FC Porto', 'SC Braga'];
 /** Question category for probability-based selection */
 export type QuestionCategory = 'liga' | 'big' | 'europa' | 'champions' | 'taca' | 'favorite';
 
-/** Pick a random element from an array */
+/** Pick a random element from a non-empty array */
 function pickRandom<T>(arr: T[]): T {
+  if (arr.length === 0) throw new Error('pickRandom: empty array');
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
@@ -186,17 +187,21 @@ function generateWrongScores(homeGoals: number, awayGoals: number): [string, str
   const scores = new Set<string>();
   const correct = `${homeGoals}-${awayGoals}`;
 
-  const attempts = [
-    `${homeGoals + 1}-${awayGoals}`,
-    `${homeGoals}-${awayGoals + 1}`,
-    `${homeGoals + 1}-${awayGoals + 1}`,
-    `${Math.max(0, homeGoals - 1)}-${awayGoals}`,
-    `${homeGoals}-${Math.max(0, awayGoals - 1)}`,
-    `${homeGoals + 2}-${awayGoals}`,
-    `${homeGoals}-${awayGoals + 2}`,
-    `${awayGoals}-${homeGoals}`,
-    `${Math.max(0, homeGoals - 1)}-${Math.max(0, awayGoals - 1)}`,
-  ];
+  // For 0-0 draws, many ±1 variants collapse to "0-0" — inject guaranteed alternatives
+  const attempts =
+    homeGoals === 0 && awayGoals === 0
+      ? ['1-0', '0-1', '1-1', '2-0', '0-2', '2-1']
+      : [
+          `${homeGoals + 1}-${awayGoals}`,
+          `${homeGoals}-${awayGoals + 1}`,
+          `${homeGoals + 1}-${awayGoals + 1}`,
+          `${Math.max(0, homeGoals - 1)}-${awayGoals}`,
+          `${homeGoals}-${Math.max(0, awayGoals - 1)}`,
+          `${homeGoals + 2}-${awayGoals}`,
+          `${homeGoals}-${awayGoals + 2}`,
+          `${awayGoals}-${homeGoals}`,
+          `${Math.max(0, homeGoals - 1)}-${Math.max(0, awayGoals - 1)}`,
+        ];
 
   for (const score of shuffle(attempts)) {
     if (score !== correct && !scores.has(score)) {
@@ -722,7 +727,7 @@ export class QuestionGenerator {
       text: 'Qual destes clubes joga na Primeira Liga?',
       answers: ['SL Benfica', 'Real Madrid', 'AC Milan'],
       correctIndex: 0,
-      type: 'shirt_number',
+      type: 'match_result',
     };
   }
 }
