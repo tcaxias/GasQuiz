@@ -16,18 +16,34 @@
   let favoriteTeam = $state('');
   let container: HTMLElement;
   let bgColor = $state('#1a1a2e');
+  let currentCleanup: (() => void) | null = null;
 
   onMount(() => {
     if (browser) {
       const storedName = localStorage.getItem(STORAGE_KEY_NAME);
       const storedTeam = localStorage.getItem(STORAGE_KEY_TEAM);
-      if (storedName && storedTeam) {
-        playerName = storedName;
-        favoriteTeam = storedTeam;
-        updateBgColor(storedTeam);
+
+      // Validate stored values — guard against tampering
+      const validName = storedName && storedName.length <= 20 ? storedName.trim() : null;
+      const validTeam = storedTeam && allTeams.includes(storedTeam) ? storedTeam : null;
+
+      if (!validName && storedName) {
+        // Clear invalid stored name
+        localStorage.removeItem(STORAGE_KEY_NAME);
+      }
+      if (!validTeam && storedTeam) {
+        // Clear invalid stored team
+        localStorage.removeItem(STORAGE_KEY_TEAM);
+      }
+
+      if (validName && validTeam) {
+        playerName = validName;
+        favoriteTeam = validTeam;
+        updateBgColor(validTeam);
         startGame();
-      } else if (storedName) {
-        playerName = storedName;
+      } else if (validName) {
+        playerName = validName;
+        nameInput = validName;
         screen = 'team';
       }
     }
@@ -63,8 +79,19 @@
 
     requestAnimationFrame(() => {
       if (!container) return;
+
+      // Remove previous listener if any
+      if (currentCleanup) {
+        window.removeEventListener('beforeunload', currentCleanup);
+        currentCleanup = null;
+      }
+
       const game = new Game(playerName, favoriteTeam, (action) => {
-        // Game already called destroy() on itself before calling this
+        // Game already called destroy() on itself
+        if (currentCleanup) {
+          window.removeEventListener('beforeunload', currentCleanup);
+          currentCleanup = null;
+        }
         if (action === 'name') {
           nameInput = playerName;
           screen = 'name';
@@ -74,8 +101,8 @@
       });
       game.init(container);
 
-      const cleanup = () => game.destroy();
-      window.addEventListener('beforeunload', cleanup);
+      currentCleanup = () => game.destroy();
+      window.addEventListener('beforeunload', currentCleanup);
     });
   }
 

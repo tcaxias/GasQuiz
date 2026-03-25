@@ -295,7 +295,7 @@ function generateGoalScorerFromMatches(filteredMatches: MatchResult[]): Question
     answers: shuffledAnswers as [string, string, string],
     correctIndex,
     type: 'goal_scorer',
-    team: match.homeTeam,
+    team: scorerTeam,
     competition: comp,
   };
 }
