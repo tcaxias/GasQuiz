@@ -264,6 +264,9 @@ function generateShirtNumberFromPlayers(filteredPlayers: Player[]): Question | n
 
 /**
  * Generate a "goal scorer" question from a filtered set of matches.
+ *
+ * Only uses scorers that exist in the player database so that
+ * wrong-answer exclusion works reliably (same name source for both).
  */
 function generateGoalScorerFromMatches(filteredMatches: MatchResult[]): Question | null {
   const matchesWithGoals = filteredMatches.filter(
@@ -272,35 +275,34 @@ function generateGoalScorerFromMatches(filteredMatches: MatchResult[]): Question
   if (matchesWithGoals.length === 0) return null;
 
   const match = pickRandom(matchesWithGoals);
-  const allScorers = [...match.homeScorers, ...match.awayScorers];
-  const correctScorer = pickRandom(allScorers);
 
-  // Determine which team the scorer belongs to
-  const scorerTeam = match.homeScorers.includes(correctScorer) ? match.homeTeam : match.awayTeam;
+  // Resolve scorers to player-database entries so names are canonical
+  const homeTeamPlayers = players.filter((p) => p.team === match.homeTeam);
+  const awayTeamPlayers = players.filter((p) => p.team === match.awayTeam);
 
-  // Get teammates from the same team, excluding all actual scorers
-  const uniqueScorers = [...new Set(allScorers)];
-  const teammates = players.filter((p) => p.team === scorerTeam).map((p) => p.name);
+  const homeScorerNames = [...new Set(match.homeScorers)];
+  const awayScorerNames = [...new Set(match.awayScorers)];
 
-  const wrongPlayers = pickRandomExcluding(teammates, uniqueScorers, 2);
+  const homeScorerPlayers = homeTeamPlayers.filter((p) => homeScorerNames.includes(p.name));
+  const awayScorerPlayers = awayTeamPlayers.filter((p) => awayScorerNames.includes(p.name));
+  const allScorerPlayers = [...homeScorerPlayers, ...awayScorerPlayers];
 
-  // Fallback: if not enough teammates, use players from the other team in the match
-  if (wrongPlayers.length < 2) {
-    const otherTeam = scorerTeam === match.homeTeam ? match.awayTeam : match.homeTeam;
-    const otherPlayers = players.filter((p) => p.team === otherTeam).map((p) => p.name);
-    const extra = pickRandomExcluding(
-      otherPlayers,
-      [...uniqueScorers, ...wrongPlayers],
-      2 - wrongPlayers.length,
-    );
-    wrongPlayers.push(...extra);
-  }
+  if (allScorerPlayers.length === 0) return null;
+
+  const correctPlayer = pickRandom(allScorerPlayers);
+  const correctName = correctPlayer.name;
+  const scorerTeam = correctPlayer.team;
+
+  // Exclude every scorer found in the DB — guarantees wrong answers never scored
+  const scorerNames = allScorerPlayers.map((p) => p.name);
+  const bothTeamNames = [...homeTeamPlayers, ...awayTeamPlayers].map((p) => p.name);
+  const wrongPlayers = pickRandomExcluding(bothTeamNames, scorerNames, 2);
 
   if (wrongPlayers.length < 2) return null;
 
-  const answers: [string, string, string] = [correctScorer, wrongPlayers[0], wrongPlayers[1]];
+  const answers: [string, string, string] = [correctName, wrongPlayers[0], wrongPlayers[1]];
   const shuffledAnswers = shuffle([...answers]);
-  const correctIndex = shuffledAnswers.indexOf(correctScorer);
+  const correctIndex = shuffledAnswers.indexOf(correctName);
   if (correctIndex === -1) return null;
 
   const comp = match.competition ?? 'liga';
