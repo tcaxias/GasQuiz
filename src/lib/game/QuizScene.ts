@@ -1,5 +1,5 @@
 import { Text, Graphics, Container, Sprite, Assets } from 'pixi.js';
-import { Scene } from './Scene';
+import { Scene, prefersReducedMotion } from './Scene';
 import type { Question, AnswerResult } from '$lib/types/quiz';
 
 const GAME_DURATION_MS = 180_000;
@@ -16,6 +16,7 @@ const LOW_TIME_MS = 10_000;
 
 export type OnAnswerCallback = (result: AnswerResult) => void;
 export type OnTimeUpCallback = (score: number, correct: number, total: number) => void;
+export type OnAriaCallback = (text: string) => void;
 
 /** Floating score pop-up data */
 interface ScorePopup {
@@ -27,10 +28,12 @@ interface ScorePopup {
 /**
  * Quiz scene — shows questions with 3 answers, timer bar, and score.
  * Features: score pop-ups, button shake on wrong, timer pulse, fade transitions.
+ * Keyboard: press 1/2/3 to select answers.
  */
 export class QuizScene extends Scene {
   private onAnswer: OnAnswerCallback;
   private onTimeUp: OnTimeUpCallback;
+  private onAria: OnAriaCallback;
 
   private score = 0;
   private questionsCorrect = 0;
@@ -39,6 +42,7 @@ export class QuizScene extends Scene {
   private feedbackTimeMs = 0;
   private inFeedback = false;
   private gameEnded = false;
+  private isDestroyed = false;
   private currentQuestion: Question | null = null;
   private getNextQuestion: () => Question;
 
@@ -54,7 +58,12 @@ export class QuizScene extends Scene {
   private bgSprite: Sprite | null = null;
   private bgOverlay: Graphics | null = null;
   private bgMask: Graphics | null = null;
-  private readonly bgImageUrls = ['/images/bg1.jpg', '/images/bg2.jpg', '/images/bg3.jpg', '/images/bg4.jpg'];
+  private readonly bgImageUrls = [
+    '/images/bg1.jpg',
+    '/images/bg2.jpg',
+    '/images/bg3.jpg',
+    '/images/bg4.jpg',
+  ];
   private loadedBgImages: string[] = [];
   private currentBgIndex = 0;
 
@@ -64,16 +73,21 @@ export class QuizScene extends Scene {
   private questionFadeIn = 0;
   private timerPulsePhase = 0;
 
+  // Keyboard handler reference for cleanup
+  private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+
   constructor(
     app: import('pixi.js').Application,
     getNextQuestion: () => Question,
     onAnswer: OnAnswerCallback,
     onTimeUp: OnTimeUpCallback,
+    onAria: OnAriaCallback,
   ) {
     super(app);
     this.getNextQuestion = getNextQuestion;
     this.onAnswer = onAnswer;
     this.onTimeUp = onTimeUp;
+    this.onAria = onAria;
   }
 
   setup(): void {
@@ -95,28 +109,53 @@ export class QuizScene extends Scene {
     this.createAnswerButtons();
     this.showNextQuestion();
     this.loadBackgrounds();
+
+    // Keyboard support — press 1/2/3 to answer
+    this.keydownHandler = (e: KeyboardEvent) => {
+      if (this.inFeedback || this.gameEnded) return;
+      const key = e.key;
+      if (key === '1') this.handleAnswer(0);
+      else if (key === '2') this.handleAnswer(1);
+      else if (key === '3') this.handleAnswer(2);
+    };
+    window.addEventListener('keydown', this.keydownHandler);
+  }
+
+  destroy(): void {
+    this.isDestroyed = true;
+    if (this.keydownHandler) {
+      window.removeEventListener('keydown', this.keydownHandler);
+      this.keydownHandler = null;
+    }
+    super.destroy();
+  }
+
+  /** Override resize to preserve game state while re-laying out */
+  resize(): void {
+    // Re-layout is complex mid-game; only redraw timer bar width (live dimension)
+    // Full re-layout would reset animations, so we only adjust what reads live dimensions
   }
 
   private async loadBackgrounds(): Promise<void> {
-    for (const url of this.bgImageUrls) {
-      try {
-        const texture = await Assets.load(url);
-        if (texture) {
-          this.loadedBgImages.push(url);
-        }
-      } catch {
-        // Image failed to load — skip it
+    // Load all images in parallel instead of sequentially
+    const results = await Promise.allSettled(this.bgImageUrls.map((url) => Assets.load(url)));
+
+    // Guard against scene being destroyed while loading
+    if (this.isDestroyed) return;
+
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].status === 'fulfilled') {
+        this.loadedBgImages.push(this.bgImageUrls[i]);
       }
     }
-    // Guard against scene being destroyed while loading
-    if (this.gameEnded) return;
+
     if (this.loadedBgImages.length > 0) {
       this.showBackground(0);
     }
   }
 
   private showBackground(index: number): void {
-    if (this.loadedBgImages.length === 0) return;
+    if (this.loadedBgImages.length === 0 || this.isDestroyed) return;
 
     // Remove previous background elements
     if (this.bgSprite) {
@@ -341,6 +380,10 @@ export class QuizScene extends Scene {
     this.questionText.text = this.currentQuestion.text;
     this.questionText.alpha = 0;
 
+    // Announce question to screen readers
+    const answerList = this.currentQuestion.answers.map((a, i) => `${i + 1}: ${a}`).join(', ');
+    this.onAria(`Pergunta: ${this.currentQuestion.text}. Respostas: ${answerList}`);
+
     const btnW = this.buttonWidth;
     const btnH = this.buttonHeight;
 
@@ -374,6 +417,8 @@ export class QuizScene extends Scene {
 
   /** Spawn a floating "+10" text that drifts up and fades */
   private spawnScorePopup(x: number, y: number): void {
+    if (prefersReducedMotion()) return;
+
     const popup = new Text({
       text: '+10',
       style: {
@@ -392,6 +437,7 @@ export class QuizScene extends Scene {
 
   /** Start shaking a button (wrong answer) */
   private startShake(btn: Container): void {
+    if (prefersReducedMotion()) return;
     this.shakeTargets.push({ btn, origX: btn.x, age: 0 });
   }
 
@@ -420,6 +466,14 @@ export class QuizScene extends Scene {
       // Spawn score popup near the score display
       this.spawnScorePopup(this.width - this.padding - this.s(40), this.s(6) + this.s(12));
     }
+
+    // Announce result to screen readers
+    const correctAnswer = this.currentQuestion.answers[this.currentQuestion.correctIndex];
+    this.onAria(
+      wasCorrect
+        ? `Correto! +10 pontos. Total: ${this.score}`
+        : `Errado. A resposta certa era: ${correctAnswer}. Pontos: ${this.score}`,
+    );
 
     const btnW = this.buttonWidth;
     const btnH = this.buttonHeight;
@@ -454,7 +508,9 @@ export class QuizScene extends Scene {
     this.updateStatsText();
 
     // Brief scale punch on score text
-    this.scoreText.scale.set(1.3);
+    if (!prefersReducedMotion()) {
+      this.scoreText.scale.set(1.3);
+    }
 
     this.onAnswer({
       wasCorrect,
@@ -499,7 +555,9 @@ export class QuizScene extends Scene {
       if (life >= 1) {
         this.container.removeChild(popup.text);
         popup.text.destroy();
-        this.scorePopups.splice(i, 1);
+        // Swap-and-pop removal instead of splice for performance
+        this.scorePopups[i] = this.scorePopups[this.scorePopups.length - 1];
+        this.scorePopups.pop();
       }
     }
 
@@ -510,7 +568,9 @@ export class QuizScene extends Scene {
       const shakeLife = shake.age / 400; // 400ms shake
       if (shakeLife >= 1) {
         shake.btn.x = shake.origX;
-        this.shakeTargets.splice(i, 1);
+        // Swap-and-pop removal
+        this.shakeTargets[i] = this.shakeTargets[this.shakeTargets.length - 1];
+        this.shakeTargets.pop();
       } else {
         const intensity = this.s(6) * (1 - shakeLife);
         shake.btn.x = shake.origX + Math.sin(shakeLife * Math.PI * 6) * intensity;
@@ -536,9 +596,11 @@ export class QuizScene extends Scene {
 
     // ── Timer pulse when low ───────────────────────────
     if (this.timeRemainingMs < LOW_TIME_MS) {
-      this.timerPulsePhase += deltaMs * 0.008;
-      const pulse = 0.7 + 0.3 * Math.abs(Math.sin(this.timerPulsePhase));
-      this.timerText.alpha = pulse;
+      if (!prefersReducedMotion()) {
+        this.timerPulsePhase += deltaMs * 0.008;
+        const pulse = 0.7 + 0.3 * Math.abs(Math.sin(this.timerPulsePhase));
+        this.timerText.alpha = pulse;
+      }
       this.timerText.style.fill = COLOR_TIMER_BAR_LOW;
     }
 

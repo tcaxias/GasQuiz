@@ -188,8 +188,8 @@ describe('Question generation', () => {
   });
 
   it('should have detailed positions for big three players', () => {
-    const bigThreePlayers = players.filter(
-      (p) => ['FC Porto', 'SL Benfica', 'Sporting CP'].includes(p.team),
+    const bigThreePlayers = players.filter((p) =>
+      ['FC Porto', 'SL Benfica', 'Sporting CP'].includes(p.team),
     );
     const withDetailedPos = bigThreePlayers.filter((p) => p.detailedPosition);
     expect(withDetailedPos.length).toBe(bigThreePlayers.length);

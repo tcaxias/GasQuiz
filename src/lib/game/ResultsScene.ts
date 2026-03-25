@@ -1,5 +1,5 @@
-import { Text, Graphics, Container } from 'pixi.js';
-import { Scene } from './Scene';
+import { Text, Graphics } from 'pixi.js';
+import { Scene, prefersReducedMotion, isMobileDevice } from './Scene';
 
 export type OnRestartCallback = () => void;
 
@@ -123,7 +123,7 @@ export class ResultsScene extends Scene {
     const accuracy = this.total > 0 ? Math.round((this.correct / this.total) * 100) : 0;
 
     const statsText = new Text({
-      text: `Respostas corretas: ${this.correct} / ${this.total}\nPrecisão: ${accuracy}%`,
+      text: `Respostas corretas: ${this.correct} / ${this.total}\nPrecisao: ${accuracy}%`,
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.s(18),
@@ -156,27 +156,35 @@ export class ResultsScene extends Scene {
     ratingText.y = this.height * 0.65;
     this.container.addChild(ratingText);
 
-    // Restart button
-    const button = this.createButton('Jogar outra vez', this.centerX, this.height * 0.78);
+    // Restart button (uses shared createButton from Scene base class)
+    const button = this.createButton(
+      'Jogar outra vez',
+      this.centerX,
+      this.height * 0.78,
+      0x3498db,
+      () => this.onRestart(),
+    );
     this.container.addChild(button);
 
-    // Spawn confetti if score is decent
-    if (this.targetScore >= 30) {
+    // Spawn confetti if score is decent (skip if reduced motion)
+    if (this.targetScore >= 30 && !prefersReducedMotion()) {
       this.spawnConfetti();
     }
   }
 
   private getRatingMessage(accuracy: number): string {
-    if (accuracy >= 90) return '🏆 Craque absoluto! Sabes tudo!';
-    if (accuracy >= 70) return '⭐ Muito bom! Grande conhecimento!';
-    if (accuracy >= 50) return '👍 Nada mau! Continua a tentar!';
-    if (accuracy >= 30) return '💪 Podes fazer melhor!';
-    return '📺 Precisas de ver mais futebol!';
+    if (accuracy >= 90) return 'Craque absoluto! Sabes tudo!';
+    if (accuracy >= 70) return 'Muito bom! Grande conhecimento!';
+    if (accuracy >= 50) return 'Nada mau! Continua a tentar!';
+    if (accuracy >= 30) return 'Podes fazer melhor!';
+    return 'Precisas de ver mais futebol!';
   }
 
   private spawnConfetti(): void {
     const colors = [0x2ecc71, 0x3498db, 0xe74c3c, 0xf1c40f, 0x9b59b6, 0xe67e22, 0xffffff];
-    const count = Math.min(60, Math.floor(this.targetScore / 2));
+    // Cap at 30 on mobile devices for performance
+    const maxParticles = isMobileDevice() ? 30 : 60;
+    const count = Math.min(maxParticles, Math.floor(this.targetScore / 2));
 
     for (let i = 0; i < count; i++) {
       const gfx = new Graphics();
@@ -217,9 +225,11 @@ export class ResultsScene extends Scene {
       this.displayedScore = Math.round(ease * this.targetScore);
       this.scoreText.text = `${this.displayedScore}`;
 
-      // Scale pulse as it counts
-      const pulse = 1 + 0.08 * Math.sin(t * Math.PI * 4) * (1 - t);
-      this.scoreText.scale.set(pulse);
+      // Scale pulse as it counts (skip if reduced motion)
+      if (!prefersReducedMotion()) {
+        const pulse = 1 + 0.08 * Math.sin(t * Math.PI * 4) * (1 - t);
+        this.scoreText.scale.set(pulse);
+      }
 
       if (t >= 1) {
         this.scoreCountDone = true;
@@ -240,55 +250,13 @@ export class ResultsScene extends Scene {
         c.gfx.alpha = Math.max(0, 1 - (c.gfx.y - this.height * 0.85) / (this.height * 0.15));
       }
 
-      // Remove when off-screen
+      // Remove when off-screen (swap-and-pop for performance)
       if (c.gfx.y > this.height + this.s(20)) {
         this.container.removeChild(c.gfx);
         c.gfx.destroy();
-        this.confettiParticles.splice(i, 1);
+        this.confettiParticles[i] = this.confettiParticles[this.confettiParticles.length - 1];
+        this.confettiParticles.pop();
       }
     }
-  }
-
-  private createButton(label: string, x: number, y: number): Container {
-    const btnContainer = new Container();
-    btnContainer.x = x;
-    btnContainer.y = y;
-
-    const w = this.buttonWidth;
-    const h = this.buttonHeight;
-
-    const bg = new Graphics();
-    bg.roundRect(-w / 2, -h / 2, w, h, this.s(12));
-    bg.fill(0x3498db);
-    btnContainer.addChild(bg);
-
-    const text = new Text({
-      text: label,
-      style: {
-        fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: this.s(22),
-        fontWeight: 'bold',
-        fill: 0xffffff,
-      },
-    });
-    text.anchor.set(0.5);
-    btnContainer.addChild(text);
-
-    btnContainer.eventMode = 'static';
-    btnContainer.cursor = 'pointer';
-
-    btnContainer.on('pointerover', () => {
-      btnContainer.scale.set(1.05);
-      bg.tint = 0xdddddd;
-    });
-    btnContainer.on('pointerout', () => {
-      btnContainer.scale.set(1.0);
-      bg.tint = 0xffffff;
-    });
-    btnContainer.on('pointerdown', () => {
-      this.onRestart();
-    });
-
-    return btnContainer;
   }
 }

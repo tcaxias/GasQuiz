@@ -82,20 +82,6 @@ export type QuestionType =
   | 'man_of_the_match'
   | 'player_position';
 
-/** Game state */
-export interface GameState {
-  phase: GamePhase;
-  score: number;
-  questionsAnswered: number;
-  questionsCorrect: number;
-  timeRemainingMs: number;
-  currentQuestion: Question | null;
-  selectedAnswer: number | null;
-  feedbackTimeMs: number;
-}
-
-export type GamePhase = 'menu' | 'playing' | 'feedback' | 'results';
-
 /** Answer result for feedback */
 export interface AnswerResult {
   wasCorrect: boolean;

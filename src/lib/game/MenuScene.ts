@@ -1,5 +1,5 @@
-import { Text, Graphics, Container } from 'pixi.js';
-import { Scene } from './Scene';
+import { Text, Graphics } from 'pixi.js';
+import { Scene, prefersReducedMotion, isMobileDevice } from './Scene';
 import { getTeamColors, defaultColors } from '$lib/data/teams';
 
 export type OnStartCallback = () => void;
@@ -70,7 +70,7 @@ export class MenuScene extends Scene {
 
     // Subtitle
     const subtitle = new Text({
-      text: 'Quiz de Futebol Português 2025-26',
+      text: 'Quiz de Futebol Portugues 2025-26',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.s(22),
@@ -86,7 +86,7 @@ export class MenuScene extends Scene {
 
     // Player greeting
     const greeting = new Text({
-      text: `Olá, ${this.playerName}!`,
+      text: `Ola, ${this.playerName}!`,
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.s(26),
@@ -124,7 +124,7 @@ export class MenuScene extends Scene {
     const settingsGap = this.s(12);
 
     const changeName = new Text({
-      text: '✏️ Alterar nome',
+      text: 'Alterar nome',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.s(14),
@@ -147,7 +147,7 @@ export class MenuScene extends Scene {
     this.container.addChild(changeName);
 
     const changeTeam = new Text({
-      text: '🔄 Alterar clube',
+      text: 'Alterar clube',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.s(14),
@@ -171,7 +171,7 @@ export class MenuScene extends Scene {
 
     // Instructions
     const instructions = new Text({
-      text: 'Responde a perguntas sobre futebol português!\n3 minutos — quantas consegues acertar?',
+      text: 'Responde a perguntas sobre futebol portugues!\n3 minutos — quantas consegues acertar?',
       style: {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.s(16),
@@ -188,17 +188,26 @@ export class MenuScene extends Scene {
     instructions.y = this.height * 0.62;
     this.container.addChild(instructions);
 
-    // Start button
-    // Floating background particles
-    this.spawnParticles(colors.secondary);
+    // Floating background particles (skip if user prefers reduced motion)
+    if (!prefersReducedMotion()) {
+      this.spawnParticles(colors.secondary);
+    }
 
-    const button = this.createButton('⚽ Jogar', this.centerX, this.height * 0.78, colors.secondary);
+    // Start button (uses shared createButton from Scene base class)
+    const button = this.createButton(
+      'Jogar',
+      this.centerX,
+      this.height * 0.78,
+      colors.secondary,
+      () => this.onStart(),
+    );
     this.container.addChild(button);
   }
 
   private spawnParticles(color: number): void {
     this.particles = [];
-    const count = 18;
+    // Fewer particles on mobile for performance
+    const count = isMobileDevice() ? 10 : 18;
     for (let i = 0; i < count; i++) {
       const gfx = new Graphics();
       const size = this.s(3 + Math.random() * 5);
@@ -228,9 +237,11 @@ export class MenuScene extends Scene {
   update(deltaMs: number): void {
     this.elapsedMs += deltaMs;
 
-    // Gentle breathing effect on title
-    const breath = 1 + 0.02 * Math.sin(this.elapsedMs * 0.002);
-    this.titleText.scale.set(breath);
+    // Gentle breathing effect on title (skip if reduced motion)
+    if (!prefersReducedMotion()) {
+      const breath = 1 + 0.02 * Math.sin(this.elapsedMs * 0.002);
+      this.titleText.scale.set(breath);
+    }
 
     // Animate floating particles
     for (const p of this.particles) {
@@ -245,50 +256,5 @@ export class MenuScene extends Scene {
         p.x = Math.random() * this.width;
       }
     }
-  }
-
-  private createButton(label: string, x: number, y: number, color: number): Container {
-    const btnContainer = new Container();
-    btnContainer.x = x;
-    btnContainer.y = y;
-
-    const w = this.buttonWidth;
-    const h = this.buttonHeight;
-
-    const bg = new Graphics();
-    bg.roundRect(-w / 2, -h / 2, w, h, this.s(12));
-    bg.fill(color);
-    btnContainer.addChild(bg);
-
-    const btnTextColor = color === 0xffffff || color > 0xcccccc ? 0x1a1a2e : 0xffffff;
-
-    const text = new Text({
-      text: label,
-      style: {
-        fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: this.s(28),
-        fontWeight: 'bold',
-        fill: btnTextColor,
-      },
-    });
-    text.anchor.set(0.5);
-    btnContainer.addChild(text);
-
-    btnContainer.eventMode = 'static';
-    btnContainer.cursor = 'pointer';
-
-    btnContainer.on('pointerover', () => {
-      btnContainer.scale.set(1.06);
-      bg.tint = 0xdddddd;
-    });
-    btnContainer.on('pointerout', () => {
-      btnContainer.scale.set(1.0);
-      bg.tint = 0xffffff;
-    });
-    btnContainer.on('pointerdown', () => {
-      this.onStart();
-    });
-
-    return btnContainer;
   }
 }

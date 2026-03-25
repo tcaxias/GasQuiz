@@ -2,17 +2,32 @@
  * Manages all game audio: sound effects and background music.
  * Uses the Web Audio API for low-latency playback.
  * Falls back gracefully if audio is unavailable.
+ *
+ * The AudioContext must be created from a user gesture (click/tap)
+ * to comply with browser autoplay policies.
  */
 export class AudioManager {
   private ctx: AudioContext | null = null;
   private buffers: Map<string, AudioBuffer> = new Map();
   private musicSource: AudioBufferSourceNode | null = null;
-  private musicGain: AudioNode | null = null;
+  private musicGain: GainNode | null = null;
   private musicPlaying = false;
   private muted = false;
+  private readyPromise: Promise<void> | null = null;
+  private pendingMusicStart = false;
 
-  /** Initialize the AudioContext (must be called from a user gesture) */
-  async init(): Promise<void> {
+  /**
+   * Initialize the AudioContext and load all sounds.
+   * Must be called from a direct user gesture handler (click, tap, keydown)
+   * or the AudioContext will be created in a suspended state.
+   */
+  init(): void {
+    if (this.readyPromise) return; // Already initialized
+
+    this.readyPromise = this.loadAll();
+  }
+
+  private async loadAll(): Promise<void> {
     try {
       this.ctx = new AudioContext();
       await Promise.all([
@@ -21,9 +36,22 @@ export class AudioManager {
         this.loadSound('music', '/sounds/music.mp3'),
         this.loadSound('end', '/sounds/end.mp3'),
       ]);
+
+      // If music was requested before loading finished, start it now
+      if (this.pendingMusicStart) {
+        this.pendingMusicStart = false;
+        this.startMusic();
+      }
     } catch {
       // Audio not available — game works fine without it
       console.warn('Audio not available');
+    }
+  }
+
+  /** Wait until all sounds are loaded. Resolves immediately if already ready. */
+  async whenReady(): Promise<void> {
+    if (this.readyPromise) {
+      await this.readyPromise;
     }
   }
 
@@ -60,9 +88,15 @@ export class AudioManager {
     source.start(0);
   }
 
-  /** Start looping background music */
+  /** Start looping background music. If sounds are still loading, defers until ready. */
   startMusic(): void {
-    if (this.muted || !this.ctx || !this.buffers.has('music') || this.musicPlaying) return;
+    if (this.muted || this.musicPlaying) return;
+
+    // If buffers haven't loaded yet, defer
+    if (!this.ctx || !this.buffers.has('music')) {
+      this.pendingMusicStart = true;
+      return;
+    }
 
     if (this.ctx.state === 'suspended') {
       this.ctx.resume();
@@ -85,6 +119,7 @@ export class AudioManager {
 
   /** Stop background music */
   stopMusic(): void {
+    this.pendingMusicStart = false;
     if (this.musicSource) {
       try {
         this.musicSource.stop();

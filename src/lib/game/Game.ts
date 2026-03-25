@@ -7,6 +7,9 @@ import { Scene } from './Scene';
 import { QuestionGenerator } from './questions';
 import { getTeamColors, defaultColors } from '$lib/data/teams';
 
+/** Callback to push game state updates for ARIA live region */
+export type OnAriaUpdate = (text: string) => void;
+
 /**
  * Main game controller.
  * Manages scene transitions, audio, and the PixiJS application lifecycle.
@@ -19,17 +22,29 @@ export class Game {
   private currentScene: Scene | null = null;
   private tickerCallback: ((ticker: import('pixi.js').Ticker) => void) | null = null;
   private onSettings?: (action: 'name' | 'team') => void;
+  private onAriaUpdate?: OnAriaUpdate;
+  private resizeHandler: (() => void) | null = null;
 
   constructor(
     playerName: string,
     favoriteTeam: string,
     onSettings?: (action: 'name' | 'team') => void,
+    onAriaUpdate?: OnAriaUpdate,
   ) {
     this.app = new Application();
     this.audio = new AudioManager();
     this.playerName = playerName;
     this.favoriteTeam = favoriteTeam;
     this.onSettings = onSettings;
+    this.onAriaUpdate = onAriaUpdate;
+  }
+
+  /**
+   * Pre-create the AudioContext inside a user gesture.
+   * Call this from a click/tap handler before init() to comply with autoplay policy.
+   */
+  initAudio(): void {
+    this.audio.init();
   }
 
   async init(container: HTMLElement): Promise<void> {
@@ -43,8 +58,23 @@ export class Game {
 
     container.appendChild(this.app.canvas);
 
-    // Init audio (will load sounds in the background)
+    // Set ARIA attributes on the canvas
+    this.app.canvas.setAttribute('role', 'application');
+    this.app.canvas.setAttribute('aria-label', 'Quiz de futebol portugues');
+
+    // Init audio if not already done (fallback — may be suspended)
+    if (!this.audio) {
+      this.audio = new AudioManager();
+    }
     this.audio.init();
+
+    // Listen for viewport resize to re-layout the current scene
+    this.resizeHandler = () => {
+      if (this.currentScene) {
+        this.currentScene.resize();
+      }
+    };
+    window.addEventListener('resize', this.resizeHandler);
 
     this.showMenu();
   }
@@ -71,6 +101,8 @@ export class Game {
   }
 
   private showMenu(): void {
+    this.ariaAnnounce(`Menu principal. Ola, ${this.playerName}!`);
+
     const menuScene = new MenuScene(
       this.app,
       this.playerName,
@@ -105,18 +137,34 @@ export class Game {
         this.audio.playEnd();
         this.showResults(score, correct, total);
       },
+      (text) => this.ariaAnnounce(text),
     );
     this.switchScene(quizScene);
   }
 
   private showResults(score: number, correct: number, total: number): void {
+    const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+    this.ariaAnnounce(
+      `Tempo esgotado! ${this.playerName}, fizeste ${score} pontos. ${correct} de ${total} corretas, ${accuracy}% de precisao.`,
+    );
+
     const resultsScene = new ResultsScene(this.app, this.playerName, score, correct, total, () => {
       this.showMenu();
     });
     this.switchScene(resultsScene);
   }
 
+  private ariaAnnounce(text: string): void {
+    if (this.onAriaUpdate) {
+      this.onAriaUpdate(text);
+    }
+  }
+
   destroy(): void {
+    if (this.resizeHandler) {
+      window.removeEventListener('resize', this.resizeHandler);
+      this.resizeHandler = null;
+    }
     if (this.currentScene) {
       this.currentScene.hide();
       this.currentScene.destroy();

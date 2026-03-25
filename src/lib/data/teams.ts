@@ -13,7 +13,7 @@ export const teamColors: Record<string, TeamColors> = {
   'SC Braga': { primary: 0xd40000, secondary: 0xffffff, text: 0xffffff },
   'Vitória SC': { primary: 0x1a1a1a, secondary: 0xffffff, text: 0xffffff },
   'Gil Vicente': { primary: 0xcc0000, secondary: 0x003399, text: 0xffffff },
-  'Moreirense': { primary: 0x006633, secondary: 0xffffff, text: 0xffffff },
+  Moreirense: { primary: 0x006633, secondary: 0xffffff, text: 0xffffff },
   'Casa Pia': { primary: 0x003366, secondary: 0xffcc00, text: 0xffffff },
   'FC Famalicão': { primary: 0x003366, secondary: 0xffffff, text: 0xffffff },
   'Santa Clara': { primary: 0xcc0000, secondary: 0xffffff, text: 0xffffff },
@@ -22,7 +22,7 @@ export const teamColors: Record<string, TeamColors> = {
   'Rio Ave': { primary: 0x006633, secondary: 0xffffff, text: 0xffffff },
   'CD Nacional': { primary: 0x1a1a1a, secondary: 0xffffff, text: 0xffffff },
   'Estrela da Amadora': { primary: 0xcc0000, secondary: 0x1a1a1a, text: 0xffffff },
-  'AVS': { primary: 0x003366, secondary: 0xcc0000, text: 0xffffff },
+  AVS: { primary: 0x003366, secondary: 0xcc0000, text: 0xffffff },
   'FC Alverca': { primary: 0xcc0000, secondary: 0xffffff, text: 0xffffff },
   'CD Tondela': { primary: 0x006633, secondary: 0xffd700, text: 0xffffff },
 };

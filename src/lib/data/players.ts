@@ -4,7 +4,11 @@ type P = [string, number, PlayerPosition, PlayerFoot, DetailedPosition?];
 
 function team(name: string, list: P[]): Player[] {
   return list.map(([n, num, pos, foot, det]) => ({
-    name: n, number: num, position: pos, team: name, foot,
+    name: n,
+    number: num,
+    position: pos,
+    team: name,
+    foot,
     ...(det ? { detailedPosition: det } : {}),
   }));
 }
