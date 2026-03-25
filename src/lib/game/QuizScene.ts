@@ -105,6 +105,8 @@ export class QuizScene extends Scene {
         // Image not available — continue without it
       }
     }
+    // Guard against scene being destroyed while loading
+    if (this.gameEnded) return;
     this.showBackground(0);
   }
 
